@@ -1,0 +1,22 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import 'katex/dist/katex.min.css';
+
+:root {
+  color-scheme: light dark;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  @apply bg-white text-slate-900 dark:bg-[#0b0c0e] dark:text-slate-100;
+}
+
+.katex-display {
+  margin: 0.5em 0 !important;
+}
