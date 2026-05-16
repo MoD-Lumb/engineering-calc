@@ -44,7 +44,7 @@ A personal web app that collects small engineering calculators, organized in gro
 
 - **Repo:** `engineering-calc` (project page).
 - **URL:** `https://mod-lumb.github.io/engineering-calc/`
-- **GitHub username:** `Mod-Lumb`
+- **GitHub username:** `MoD-Lumb` (URLs are case-insensitive)
 - **Domain:** none initially; custom domain optional later.
 
 ---
@@ -274,7 +274,147 @@ GitHub Action on push to `main`:
 
 ---
 
-## 14. Build order (proposed)
+## 14. Calculator authoring (v2 — YAML spec + Excel-like layout + MDX theory)
+
+This extension lets each "real" calculator be authored as a small YAML spec + an MDX theory file, instead of writing React. The goal: port an Excel calculation by transcribing it into the spec.
+
+### 14.1 Calculator folder structure (v2)
+
+```
+calculators/mechanical/axial-stress/
+├─ calc.yaml            # inputs, computed cells, layout, side notes
+├─ theory.mdx           # Theoretical explanation (easy to edit)
+├─ examples.mdx         # Worked examples (easy to edit)
+└─ index.ts             # Thin loader: imports the YAML/MDX and registers meta
+```
+
+The existing `.tsx`-only pattern stays valid for calculators that need custom UI; the YAML+MDX pattern is the default for new ones.
+
+### 14.2 `calc.yaml` schema
+
+```yaml
+slug: axial-stress
+name: Axial stress
+category: mechanical
+description: Normal stress under uniaxial loading.
+status: live
+
+# Rows are evaluated top-to-bottom. Each row has either:
+#  - `input:` (user-editable number)  OR
+#  - `formula:` (math.js expression referencing other rows by `id`)
+rows:
+  - id: F
+    label: Axial force
+    input: 1000
+    unit: N
+    note: Positive in tension, negative in compression.
+
+  - id: A
+    label: Cross-section area
+    input: 100
+    unit: mm²
+    note: Net area, gross holes deducted.
+
+  - id: sigma
+    label: Normal stress
+    formula: F / A
+    unit: MPa
+    note: σ = F / A   (1 N / 1 mm² = 1 MPa)
+    highlight: true   # styled as a result row
+```
+
+- `input` rows render as editable number fields with a unit suffix.
+- `formula` rows recompute live (math.js evaluation, sandboxed — no arbitrary JS).
+- `note:` per row populates the right-side notes column.
+- Optional `highlight: true` marks a final/result row visually.
+- All values are SI in the spirit of §7; if a calculator needs internal unit conversions, do them inside the formula.
+
+### 14.3 Page layout (per calculator)
+
+```
+┌─ Tabs: Calculator | Theory | Examples ─────────────────────────┐
+│ Calculator tab:                                                  │
+│ ┌─────────────────────────────────┬─────────────────────────────┐│
+│ │  Parameter        Value   Unit  │  Notes                       ││
+│ │  Axial force F    [1000]  N     │  Positive in tension…        ││
+│ │  Area A           [100]   mm²   │  Net area, gross holes…      ││
+│ │  ─────────────────────────────  │  σ = F / A                   ││
+│ │  Normal stress σ  10.0    MPa   │  (1 N / 1 mm² = 1 MPa)       ││
+│ │  [Copy result] [Copy as table]  │                              ││
+│ └─────────────────────────────────┴─────────────────────────────┘│
+└──────────────────────────────────────────────────────────────────┘
+```
+
+- **Left:** datasheet-style row grid (label / value / unit), result rows visually distinguished.
+- **Right:** sticky notes column populated from `note:` fields, aligned to its row when scrolling.
+- **Bottom:** copy buttons (result, all rows as TSV for Excel paste).
+
+### 14.4 Theory & examples (MDX)
+
+`theory.mdx` and `examples.mdx` are plain markdown with two helper components available without import:
+
+```mdx
+# Axial stress
+
+Normal stress for a prismatic bar loaded along its centroidal axis:
+
+<Formula tex="\sigma = \dfrac{F}{A}" />
+
+## Variables
+
+| Symbol | Meaning              | Unit |
+|--------|----------------------|------|
+| σ      | Normal stress        | MPa  |
+| F      | Axial force          | N    |
+| A      | Cross-sectional area | mm²  |
+
+## Assumptions
+
+- Linear elastic material.
+- Uniform stress distribution across the section.
+```
+
+Editing flow: open `theory.mdx` in any editor (VS Code, Notepad++), save, refresh — done. No React knowledge required.
+
+### 14.5 Excel → spec workflow (manual port)
+
+1. Look at the Excel calculator.
+2. List the named inputs, then the intermediate and result cells in evaluation order.
+3. Copy each formula, replacing cell references (`=B3/B4`) with the row `id`s you chose (`F / A`). math.js accepts most Excel-style operators and functions (`SQRT`, `IF`, `MIN`, `MAX`, `^`, etc.).
+4. Add a one-line `note:` per row drawn from the Excel comments / column to the right.
+5. Drop screenshots or derivations into `theory.mdx`.
+
+A future enhancement (not v2) can add a `.xlsx → calc.yaml` build-time converter using SheetJS, once the spec format proves itself on a few hand-ported calculators.
+
+### 14.6 Dependencies to add
+
+| Package | Why |
+|---|---|
+| `mathjs` | Safe formula evaluation in the browser |
+| `js-yaml` | Parse `calc.yaml` at build time |
+| `@next/mdx` + `@mdx-js/loader` + `@mdx-js/react` | MDX support for theory/examples |
+| `remark-gfm` | GitHub-flavored markdown (tables) inside MDX |
+
+### 14.7 New components
+
+- `SpecGrid.tsx` — renders the input/result row grid from a parsed spec, live-recomputes on input change, persists inputs to `localStorage` (key `ec-inputs-<slug>`).
+- `NotesColumn.tsx` — right-side sticky column of per-row notes.
+- `MdxProvider.tsx` — wires up `<Formula>` and any other helpers as default MDX components.
+- The existing `Theory.tsx`/`Examples.tsx` per calculator are replaced with imports of the corresponding `.mdx` for new calculators.
+
+### 14.8 Proof of concept
+
+`axial-stress` will be the first calculator built with the v2 pattern, end-to-end:
+- `calc.yaml` with F, A, σ rows (as shown above)
+- `theory.mdx` with the formula, variable table, assumptions
+- `examples.mdx` with one worked example
+- Status flipped from `wip` → `live`
+
+The other 5 stubs stay as-is until each is ported.
+
+---
+
+## 15. Build order (proposed)
 
 1. Bootstrap Next.js + Tailwind + KaTeX, configure for static export & GitHub Pages.
 2. Build app shell: header, sidebar, theme toggle, layout.

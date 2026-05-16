@@ -1,0 +1,32 @@
+slug: axial-stress
+name: Axial stress
+category: mechanical
+description: Normal stress under uniaxial loading.
+status: live
+tags:
+  - stress
+  - normal
+  - force
+
+rows:
+  - id: F
+    label: Axial force
+    input: 1000
+    unit: N
+    note: Positive in tension, negative in compression.
+
+  - id: A
+    label: Cross-section area
+    input: 100
+    unit: mm²
+    note: Net area — deduct hole or notch losses.
+
+  - id: sigma
+    label: Normal stress
+    formula: F / A
+    unit: MPa
+    digits: 3
+    highlight: true
+    note: |
+      σ = F / A
+      (1 N / 1 mm² = 1 MPa)
