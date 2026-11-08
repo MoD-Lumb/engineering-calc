@@ -1,0 +1,92 @@
+# 8UN thread fit — class 2A bolt / class 2B nut (ASME B1.1)
+
+The 8-thread series (8UN) is the constant-pitch series of ASME B1.1 with
+**8 threads per inch** for nominal sizes from 1 in to 6 in (1-8 is also the
+UNC size). It is the standard thread for large bolts and studs, e.g. flange
+bolting to ASME B16.5 / B18.2.1 at 1-1/8 in and larger. Class **2A** (external)
+and **2B** (internal) are the general-purpose classes.
+
+## Basic profile
+
+<Formula tex="P = \dfrac{1}{n} = 0.125\ \text{in}, \qquad H = \dfrac{\sqrt{3}}{2}P = 0.866025\,P" />
+
+<Formula tex="E = D - 0.649519\,P \qquad D_1 = D - 1.082532\,P" />
+
+The basic profile has a flat of P/8 at the major diameter D and a flat of P/4
+at the minor diameter D₁. The basic thread engagement height is 5H/8.
+
+## Tolerances (classes 2A and 2B)
+
+Pitch-diameter tolerance of class 2A, with the length of engagement LE taken
+equal to the basic major diameter (basis of the B1.1 tables):
+
+<Formula tex="T_{d2} = 0.0015\sqrt[3]{D} + 0.0015\sqrt{L_E} + 0.015\sqrt[3]{P^2}, \qquad L_E = D" />
+
+| Quantity | Class | Formula |
+|---|---|---|
+| Allowance es | 2A | 0.300 · T<sub>d2</sub> |
+| Pitch-diameter tolerance T<sub>d2</sub> | 2A | formula above |
+| Pitch-diameter tolerance T<sub>D2</sub> | 2B | 1.300 · T<sub>d2</sub> |
+| Major-diameter tolerance T<sub>d</sub> | 2A | 0.060 · ∛P² |
+| Minor-diameter tolerance T<sub>D1</sub> | 2B | 0.25 P − 0.40 P² (finer than 4 tpi) |
+
+Tolerances and the allowance are rounded to 4 decimal places before they are
+applied to the basic sizes, which is how the B1.1 tables are built. Class 2B
+minor diameters are published to 3 decimals.
+
+## Limits of size
+
+External thread, class 2A (bolt). Maximum material = maximum size:
+
+<Formula tex="d_{max} = D - es \qquad d_{min} = d_{max} - T_d" />
+<Formula tex="d_{2,max} = E - es \qquad d_{2,min} = d_{2,max} - T_{d2}" />
+<Formula tex="d_{3,max}\ (\text{UNR, ref.}) = d_{2,max} - 0.577350\,P" />
+
+Internal thread, class 2B (nut). Maximum material = minimum size; there is no allowance:
+
+<Formula tex="D_{1,min} = D_1 \qquad D_{1,max} = D_{1,min} + T_{D1}" />
+<Formula tex="D_{2,min} = E \qquad D_{2,max} = E + T_{D2} \qquad D_{min} = D" />
+
+## Material conditions and clearance
+
+| Condition | Bolt (2A) | Nut (2B) |
+|---|---|---|
+| MMC — maximum material | largest bolt: d max, d₂ max | smallest hole: D₁ min, D₂ min |
+| LMC — least material | smallest bolt: d min, d₂ min | largest hole: D₁ max, D₂ max |
+
+The tightest fit is an MMC bolt in an MMC nut. Its pitch-diameter clearance is
+exactly the allowance es. The loosest fit is an LMC bolt in an LMC nut:
+
+<Formula tex="c_{min} = D_{2,min} - d_{2,max} = es \qquad c_{max} = D_{2,max} - d_{2,min} = es + T_{d2} + T_{D2}" />
+
+With 60° flanks and the bolt centred, a diametral pitch clearance c gives a total axial play of
+
+<Formula tex="a = c \cdot \tan 30^\circ = 0.57735\, c" />
+
+The radial depth of thread engagement is (d − D₁)/2. It is largest at MMC/MMC
+and smallest at LMC/LMC.
+
+## What the model shows
+
+- Threads are true helical 60° UN forms built from the limits above: a flat
+  crest and a UNR rounded root on the bolt, a flat root and crest on the nut,
+  right-hand, 8 tpi.
+- **Tolerance magnification ×k** draws every diameter as
+  basic + k·(limit − basic). ×1 is true scale. Clearances of a few
+  thousandths of an inch only become visible when they are magnified.
+- The section caps are exact axial sections of the helical solids. The MMC
+  colour remains visible only where MMC material exceeds LMC material — the
+  tolerance zone. The green fill is the free space between the visible bolt and
+  nut.
+- Values marked † are not toleranced by B1.1: the bolt minor diameter at LMC
+  and the nut major diameter at LMC. They are derived from the thread form so
+  that the least-material solids are fully defined.
+- Hex head and nut proportions are approximate heavy-hex dimensions
+  (across flats ≈ 1.5D + 1/8 in), chamfered 30°, for visualisation only.
+
+## Reference
+
+- ASME B1.1 — *Unified Inch Screw Threads (UN, UNR, and UNJ Thread Forms)*:
+  thread series, tolerance formulas and limits of size.
+- ASME B18.2.1 / B18.2.2 — hex bolts and nuts (head and nut proportions,
+  approximate).
