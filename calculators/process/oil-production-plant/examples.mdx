@@ -1,0 +1,73 @@
+## Example 1 — Plant mass balance
+
+A field produces **Q_L = 2 000 m³/d** of stock-tank liquid with a **water cut of 30 %** and a **GOR of 120 Sm³/Sm³**. Find the oil, water and gas rates the plant must handle. These are the defaults in the *Plant balance* panel of the 3D model.
+
+**Oil and water:**
+
+<Formula tex="Q_o = Q_L\,(1 - WC) = 2000 \cdot (1 - 0.30) = 1\,400\ \mathrm{m^3/d}" />
+
+<Formula tex="Q_w = Q_L \cdot WC = 2000 \cdot 0.30 = 600\ \mathrm{m^3/d}" />
+
+**Gas:**
+
+<Formula tex="Q_g = GOR \cdot Q_o = 120 \cdot 1\,400 = 168\,000\ \mathrm{Sm^3/d}" />
+
+The water–oil ratio is 600 / 1 400 ≈ 0.43. The water train therefore has to clean and re-inject almost half a cubic metre of water for every cubic metre of oil sold. Water cut rises over field life, often to 80 – 90 %, so the water train frequently becomes the bottleneck of an old field.
+
+> These are standard (stock-tank) volumes. At separator pressure and temperature the oil still contains dissolved gas, so its actual volume is larger (formation volume factor / shrinkage).
+
+## Example 2 — Water droplet settling in the treater (Stokes' law)
+
+Water droplets of **d = 100 µm** settle through crude in the electrostatic treater. Given ρ_w = 1 050 kg/m³ (brine), ρ_o = 850 kg/m³ and μ_o = 5 mPa·s at treater temperature, how fast do they settle and how long do they take to fall through a 1 m oil layer?
+
+<Formula tex="v_t = \dfrac{g\, d^2\, (\rho_w - \rho_o)}{18\,\mu_o} = \dfrac{9.81 \cdot (1\times10^{-4})^2 \cdot 200}{18 \cdot 0.005} \approx 2.18\times10^{-4}\ \mathrm{m/s}" />
+
+That is about **0.22 mm/s (0.79 m/h)**. Crossing a 1 m oil layer takes:
+
+<Formula tex="t = \dfrac{1.0}{2.18\times10^{-4}} \approx 4\,590\ \mathrm{s} \approx 76\ \mathrm{min}" />
+
+Check that Stokes' law applies:
+
+<Formula tex="Re = \dfrac{\rho_o\, v_t\, d}{\mu_o} = \dfrac{850 \cdot 2.18\times10^{-4} \cdot 1\times10^{-4}}{0.005} \approx 0.004 \ll 1 \quad \checkmark" />
+
+**What the electric field buys.** If the electrostatic grids coalesce the droplets to **300 µm**, the velocity rises by 3² = 9 times, to about 1.96 mm/s. The same 1 m is then crossed in about **8.5 min**. Heating the oil so its viscosity halves would double the velocity again. This is the reasoning behind "heat + electric field + chemicals" in a treater.
+
+## Example 3 — Diameter of a gas scrubber (Souders–Brown)
+
+The gas from Example 1 (168 000 Sm³/d) passes through a vertical scrubber with a mesh pad at **20 bar(g) and 50 °C**. Take a molar mass of M = 20 kg/kmol, a compressibility of Z = 0.95, a droplet (liquid) density of ρ_l = 750 kg/m³ and K = 0.08 m/s. Find the minimum vessel diameter.
+
+**Actual gas flow** (21.0 bar(a), 323.15 K; standard conditions 1.01325 bar, 288.15 K):
+
+<Formula tex="Q_{g,act} = Q_{g,std}\,\dfrac{p_{std}}{p}\,\dfrac{T}{T_{std}}\,Z = \dfrac{168\,000}{86\,400}\cdot\dfrac{1.01325}{21.0}\cdot\dfrac{323.15}{288.15}\cdot 0.95 \approx 0.100\ \mathrm{m^3/s}" />
+
+**Gas density:**
+
+<Formula tex="\rho_g = \dfrac{p\,M}{Z\,R\,T} = \dfrac{21.0\times10^{5} \cdot 20}{0.95 \cdot 8\,314 \cdot 323.15} \approx 16.5\ \mathrm{kg/m^3}" />
+
+**Maximum gas velocity:**
+
+<Formula tex="v_{g,\max} = 0.08\sqrt{\dfrac{750 - 16.5}{16.5}} \approx 0.534\ \mathrm{m/s}" />
+
+**Minimum area and diameter:**
+
+<Formula tex="A_{\min} = \dfrac{0.100}{0.534} \approx 0.187\ \mathrm{m^2}, \qquad D_{\min} = \sqrt{\dfrac{4 \cdot 0.187}{\pi}} \approx 0.49\ \mathrm{m}" />
+
+A standard size with some margin, such as **ID 0.6 m**, would be selected. The required height then comes from the liquid hold-up, the inlet device and the clearances to the mesh pad.
+
+## Example 4 — Liquid residence time of the HP separator
+
+The HP separator in the 3D model is drawn as **ID 3.0 m × 9.0 m** (seam to seam). With the liquid level at half the diameter, what residence time does the liquid of Example 1 get, and what rate could the vessel take at a 10 min design residence time? Ignore the heads.
+
+**Liquid volume** (half of the cylinder):
+
+<Formula tex="V_{liquid} = \tfrac{1}{2}\cdot\dfrac{\pi\, D^2}{4}\cdot L = \tfrac{1}{2}\cdot\dfrac{\pi \cdot 3.0^2}{4}\cdot 9.0 \approx 31.8\ \mathrm{m^3}" />
+
+**Residence time** at 2 000 m³/d (1.389 m³/min):
+
+<Formula tex="t_r = \dfrac{31.8}{1.389} \approx 22.9\ \mathrm{min}" />
+
+**Capacity** at t_r = 10 min:
+
+<Formula tex="Q_{\max} = \dfrac{V_{liquid}}{t_r} = \dfrac{31.8}{10} = 3.18\ \mathrm{m^3/min} \approx 4\,580\ \mathrm{m^3/d}" />
+
+The vessel has plenty of margin at today's rate. As water cut grows the total liquid rate usually rises, and the separator, not the reservoir, can end up limiting production.

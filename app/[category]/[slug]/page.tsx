@@ -30,7 +30,7 @@ export default function CalculatorPage({ params }: PageProps) {
   const category = categoryBySlug(params.category);
   if (!calc || !category) notFound();
 
-  const { Calculator, Theory, Examples, meta } = calc;
+  const { Calculator, Theory, Examples, meta, tabLabels } = calc;
 
   return (
     <article>
@@ -50,6 +50,7 @@ export default function CalculatorPage({ params }: PageProps) {
         calculator={<Calculator />}
         theory={<Theory />}
         examples={<Examples />}
+        labels={tabLabels}
       />
     </article>
   );

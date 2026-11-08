@@ -5,6 +5,7 @@ import boltShear from './mechanical/bolt-shear';
 import concreteVolume from './civil/concrete-volume';
 import unitLength from './civil/unit-converter-length';
 import unitPressure from './civil/unit-converter-pressure';
+import oilProductionPlant from './process/oil-production-plant';
 
 export const calculators: CalcModule[] = [
   axialStress,
@@ -13,6 +14,7 @@ export const calculators: CalcModule[] = [
   concreteVolume,
   unitLength,
   unitPressure,
+  oilProductionPlant,
 ];
 
 export function findCalculator(category: string, slug: string): CalcModule | undefined {

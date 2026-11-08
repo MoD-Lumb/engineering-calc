@@ -11,6 +11,11 @@ export const categories: Category[] = [
     name: 'Civil / Structural / Unit converters',
     description: 'Loads, sections, geometry, conversions.',
   },
+  {
+    slug: 'process',
+    name: 'Process / Oil & Gas',
+    description: 'Production facilities, separation, treatment — with 3D explainers.',
+  },
 ];
 
 export function categoryBySlug(slug: string): Category | undefined {

@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import type { CalcTabKey } from '@/lib/types';
 
-type TabKey = 'calculator' | 'theory' | 'examples';
+type TabKey = CalcTabKey;
 
 interface CalcTabsProps {
   calculator: ReactNode;
   theory: ReactNode;
   examples: ReactNode;
+  labels?: Partial<Record<TabKey, string>>;
 }
 
 const TABS: Array<{ key: TabKey; label: string }> = [
@@ -16,7 +18,7 @@ const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'examples', label: 'Examples' },
 ];
 
-export function CalcTabs({ calculator, theory, examples }: CalcTabsProps) {
+export function CalcTabs({ calculator, theory, examples, labels }: CalcTabsProps) {
   const [active, setActive] = useState<TabKey>('calculator');
 
   const content = active === 'calculator' ? calculator : active === 'theory' ? theory : examples;
@@ -40,7 +42,7 @@ export function CalcTabs({ calculator, theory, examples }: CalcTabsProps) {
                 }
                 aria-current={isActive ? 'page' : undefined}
               >
-                {tab.label}
+                {labels?.[tab.key] ?? tab.label}
               </button>
             );
           })}

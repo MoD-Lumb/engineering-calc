@@ -414,7 +414,31 @@ The other 5 stubs stay as-is until each is ported.
 
 ---
 
-## 15. Build order (proposed)
+## 15. Process / Oil & Gas — 3D explainers
+
+A third category, **Process / Oil & Gas** (`/process/...`), holds explanatory pages that are not plain calculators.
+
+**First page:** `/process/oil-production-plant`, an interactive 3D model of an onshore oil production plant built with **three.js**.
+
+- **Process coverage:** reservoir & wells → manifold / test separator → inlet heater → HP & LP separators → electrostatic treater → stabilizer → storage → export. Also the gas train (scrubber, compressor, TEG dehydration, sales gas), the water train (hydrocyclones, IGF, injection), the flare and the control room.
+- **3D features:** animated, colour-coded flow per stream, cutaway vessels showing liquid levels and internals, and a see-through subsurface. Clicking equipment opens an info panel; there is also a guided tour and a stream-highlight filter.
+- **Plant balance widget:** liquid rate, water cut and GOR give the oil, water and gas rates. The flow animation speed follows the results.
+- **Tabs:** renamed per module via the optional `tabLabels` field on `CalcModule` to "3D model / Process theory / Worked examples". Theory and examples are MDX, as in v2.
+
+### File layout
+
+```
+calculators/process/oil-production-plant/
+├─ index.tsx              # meta + tab labels
+├─ PlantViewerLoader.tsx  # next/dynamic, ssr: false (keeps three.js out of other pages)
+├─ PlantViewer.tsx        # React UI: toolbar, info panel, tour, plant balance
+├─ scene.ts               # framework-agnostic three.js scene (procedural geometry)
+├─ equipment.ts           # equipment texts, streams, systems (single source for UI + labels)
+├─ theory.mdx
+└─ examples.mdx
+```
+
+## 16. Build order (proposed)
 
 1. Bootstrap Next.js + Tailwind + KaTeX, configure for static export & GitHub Pages.
 2. Build app shell: header, sidebar, theme toggle, layout.

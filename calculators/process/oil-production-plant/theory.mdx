@@ -1,0 +1,149 @@
+## What an oil production plant does
+
+A well does not produce "oil". It produces a hot, pressurised **mixture of crude oil, natural gas and water**, often with sand, salts and dissolved CO₂ or H₂S. The production plant (also called a *gas–oil separation plant*, GOSP, or *central processing facility*) turns this well stream into three saleable or disposable products:
+
+| Product | Leaves the plant as | Typical specification |
+| ------- | ------------------- | --------------------- |
+| Crude oil | Stabilised, dry crude into the export pipeline or tankers | BS&W ≤ 0.5 vol %, salt ≤ ≈ 30 mg/L, RVP ≤ ≈ 0.7 bar |
+| Gas | Dry, compressed gas to the sales pipeline, fuel, gas lift or re-injection | Water content ≈ 60 – 110 mg/Sm³, hydrocarbon dew point |
+| Water | Clean enough to re-inject into the reservoir or to discharge | Oil-in-water ≈ 10 – 30 mg/L |
+
+Almost every unit in the plant exists to do one of three things: **separate the phases**, **bring each phase to specification**, or **keep the plant safe**.
+
+## Process flow in the 3D model
+
+The numbers match the labels in the 3D model.
+
+**Reservoir, wells and inlet**
+
+- **1 · Reservoir.** Oil, gas and water in porous rock under a sealing cap rock, layered by density.
+- **2 · Wells.** Fluid flows up the tubing. The Christmas tree and choke control the rate.
+- **3 · Manifold.** Collects all the wells and routes each one to production or to test.
+- **4 · Test separator.** Meters one well at a time.
+- **5 · Inlet heater.** Warms the stream to help separation and avoid hydrates and wax.
+
+**Oil train**
+
+- **6 · HP 3-phase separator.** Gravity split into gas, oil and water.
+- **7 · LP separator.** A lower pressure releases more flash gas.
+- **8 · Electrostatic treater.** Removes the last water and salt.
+- **9 · Stabilizer.** Strips light ends so the crude meets the RVP specification.
+- **10 · Storage tanks.** Buffer, settling and gauging.
+- **11 · Export pumps and fiscal metering.** Custody transfer into the pipeline.
+
+**Gas train**
+
+- **12 · Scrubber.** Knocks out liquid droplets.
+- **13 · Compressor and aftercooler.** Boosts the pressure.
+- **14 · TEG dehydration.** Removes water vapour.
+- **15 · Sales-gas metering.** Measures volume and energy.
+
+**Water train**
+
+- **17 · Hydrocyclones.** Bulk de-oiling.
+- **18 · Flotation (IGF).** Polishing.
+- **19 · Water injection.** Pressure support and disposal.
+
+**Safety and control**
+
+- **16 · Flare.** Safe disposal of relieved gas.
+- **20 · Control room.** DCS control and an independent emergency shutdown (ESD).
+
+## Key terms
+
+**Water cut** is the fraction of the produced liquid that is water:
+
+<Formula tex="WC = \dfrac{Q_w}{Q_o + Q_w}" />
+
+**Gas–oil ratio** is the volume of gas produced per volume of oil, both at standard conditions (15 °C, 1.01325 bar):
+
+<Formula tex="GOR = \dfrac{Q_g}{Q_o} \quad \left[\mathrm{Sm^3/Sm^3}\right]" />
+
+**BS&W** (basic sediment and water) is the volume fraction of water and solids left in the crude; it is the main export specification for the oil.
+
+**Reid vapour pressure (RVP)** is the vapour pressure of the crude at 37.8 °C, measured by a standard test. It controls how much the oil "boils" in tanks and tankers.
+
+**API gravity** is the industry's density scale for crude (higher = lighter). SG is the specific gravity at 15.6 °C:
+
+<Formula tex="{}^{\circ}\mathrm{API} = \dfrac{141.5}{SG} - 131.5" />
+
+## Gravity separation — Stokes' law
+
+Separators work because water droplets are heavier than oil and sink through it, while oil droplets and gas bubbles rise. For small droplets in laminar flow, the terminal settling velocity is given by **Stokes' law**:
+
+<Formula tex="v_t = \dfrac{g\, d^{2}\, (\rho_w - \rho_o)}{18\, \mu_o}" />
+
+| Symbol | Meaning | Unit |
+| ------ | ------- | ---- |
+| v_t | Terminal settling velocity of the droplet | m/s |
+| g | Gravitational acceleration (9.81) | m/s² |
+| d | Droplet diameter | m |
+| ρ_w, ρ_o | Density of water (droplet) and oil (continuous phase) | kg/m³ |
+| μ_o | Dynamic viscosity of the oil | Pa·s |
+
+The formula explains most of the design choices in the oil train:
+
+- **Settling velocity ∝ d².** Doubling the droplet size makes it settle four times faster. This is why electrostatic treaters, coalescers and demulsifiers try to *grow* droplets.
+- **Settling velocity ∝ 1 / μ.** Heating lowers the oil viscosity sharply, which is the job of the inlet heater and the heated treater.
+- **Settling velocity ∝ Δρ.** Heavy crudes (small density difference to water) are much harder to dehydrate.
+
+Stokes' law is valid for a droplet Reynolds number below about 1, which is normally true for oil–water separation.
+
+## Gas capacity — Souders–Brown equation
+
+The gas section of a separator or scrubber must be large enough that the gas velocity does not carry liquid droplets out with it. The maximum allowable gas velocity is estimated with the **Souders–Brown equation**:
+
+<Formula tex="v_{g,\max} = K \sqrt{\dfrac{\rho_l - \rho_g}{\rho_g}}" />
+
+The minimum flow area for an actual gas flow Q_g,act is then:
+
+<Formula tex="A_{\min} = \dfrac{Q_{g,act}}{v_{g,\max}}, \qquad D_{\min} = \sqrt{\dfrac{4 A_{\min}}{\pi}}" />
+
+K is an empirical sizing factor that depends on the vessel type and internals. Typical values (GPSA) are:
+
+- **Vertical vessel with a mesh pad:** K ≈ 0.055 – 0.107 m/s.
+- **Horizontal vessel:** K ≈ 0.12 – 0.15 m/s.
+
+Use the vendor's or the governing standard's value for real designs.
+
+## Liquid residence time
+
+Liquid must stay in the vessel long enough for the gas to break out and for oil and water to separate:
+
+<Formula tex="t_r = \dfrac{V_{liquid}}{Q_{liquid}}" />
+
+Typical design values are about 1 – 3 min for two-phase gas/liquid separation and 3 – 10 min (up to 20 – 30 min for heavy or emulsion-prone crude) for three-phase oil/water separation.
+
+## Why separate in several stages?
+
+Each pressure let-down flashes gas out of the oil. A single large flash from wellhead pressure to atmospheric pressure would drag intermediate components (propane to hexane) into the gas. Two to four smaller steps (HP → LP → stabilizer or stock tank) keep more of them in the liquid, giving **more stable oil per unit of well fluid**. The recovered flash gas must then be recompressed, which is the job of the compressors.
+
+## Hydrates and why gas is dried
+
+Gas hydrates are ice-like solids of water and light hydrocarbons that form at **high pressure and low temperature** whenever free water is present. They can plug chokes, valves and pipelines. The plant prevents them by:
+
+- **Heating** the well stream (inlet heater).
+- **Drying** the gas so no free water can condense in the pipeline (TEG dehydration).
+- **Injecting inhibitors** (methanol or MEG) where heating and drying are not practical.
+
+## Safety layers
+
+- **Basic process control (DCS):** level, pressure, temperature and flow loops keep the plant inside its normal window.
+- **Alarms and operator action.**
+- **Safety instrumented system / ESD:** independent trips close shutdown valves and stop equipment.
+- **Mechanical protection:** pressure safety valves relieve to the **flare**, and blowdown valves depressurise equipment in an emergency.
+- **Containment and detection:** bund walls, fire and gas detection, and the spacing between hazardous areas.
+
+## Assumptions of the 3D model
+
+- Single-train, onshore layout with three producers and one water injector.
+- Simplified piping: only the main process streams are drawn, and control valves and instruments are shown sparingly.
+- Not to scale. The subsurface is compressed vertically (real reservoirs are 1 – 4 km deep), and real tanks and flare stacks are far larger.
+- Typical values are indicative ranges from public literature, not design values.
+
+## References
+
+- GPSA *Engineering Data Book*, Section 7 (Separation equipment) and Section 20 (Dehydration).
+- API Spec 12J — *Specification for Oil and Gas Separators*.
+- API Std 521 — *Pressure-relieving and Depressuring Systems*.
+- K. Arnold & M. Stewart, *Surface Production Operations*, Vol. 1 — Design of oil handling systems and facilities.
