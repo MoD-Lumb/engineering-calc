@@ -1,0 +1,93 @@
+## Situation
+
+A plate lies on a support and is bolted down at one end. An object rests on the free end. The plate acts as a lever: it tries to rotate about the **edge of the support** nearest the object, and the bolts, which sit behind that edge, hold it down.
+
+```
+   object (weight W)
+        ↓
+ ───────●───────────────┐
+ plate  ←── a ─────────→│ support edge (pivot)
+ ──────────────┬────┬───┴───────────
+               │ b₂ │ b₁   ← bolts hold the plate down
+ support ──────┴────┴─────────────────
+```
+
+The same equations also cover a plate fixed to a wall: the pivot is the lower edge of the plate and the bolts additionally carry the weight as shear (set **Mounting = 1**).
+
+## Loads
+
+Weight of the object and of the overhanging plate, with the load factor γ_F:
+
+<Formula tex="M_d = \gamma_F \left( m\,g\,a + W_{pl}\,\dfrac{L}{2} \right), \qquad P_d = \gamma_F \left( m\,g + W_{pl} \right)" />
+
+<Formula tex="W_{pl} = \rho\, t\, b\, L\, g, \qquad \rho = 7850\ \text{kg/m}^3" />
+
+## Tension in the bolts
+
+The plate is taken as rigid and rotating about the support edge. Bolt force is then proportional to distance from the edge, <Formula display={false} tex="T_i = \lambda\, b_i" />. Moment equilibrium about the edge gives <Formula display={false} tex="M_d = \sum T_i\, b_i = \lambda \sum b_i^2" />, so the most loaded (farthest) bolt carries:
+
+<Formula tex="T_{max} = \dfrac{M_d \, b_{max}}{k \sum_{i=1}^{n} b_i^{2}}, \qquad b_i = c + (i-1)\,p" />
+
+with *k* bolts per row, *n* rows, first row at *c* from the edge and row pitch *p*.
+
+Shear per bolt (horizontal load, plus the full weight for a wall mount), shared equally:
+
+<Formula tex="V_b = \dfrac{\gamma_F H + \text{wall}\cdot P_d}{k\, n}" />
+
+## Bolt resistance (EN 1993-1-8, Table 3.4)
+
+<Formula tex="F_{t,Rd} = \dfrac{0.9\, f_{ub}\, A_s}{\gamma_{M2}}, \qquad F_{v,Rd} = \dfrac{\alpha_v\, f_{ub}\, A_s}{\gamma_{M2}}, \qquad \gamma_{M2} = 1.25" />
+
+<Formula tex="A_s = \dfrac{\pi}{4}\left(d - 0.9382\,P\right)^2" />
+
+- α_v = 0.6 for classes 4.6, 5.6 and 8.8; 0.5 otherwise.
+- Shear is checked with A_s, so it is conservative if the shear plane is in the plain shank.
+
+Combined shear and tension:
+
+<Formula tex="\dfrac{V_b}{F_{v,Rd}} + \dfrac{T_{max}}{1.4\,F_{t,Rd}} \le 1.0, \qquad \dfrac{T_{max}}{F_{t,Rd}} \le 1.0" />
+
+## Sizing
+
+Setting both utilisations to 1.0 and solving for the area:
+
+<Formula tex="A_{s,req} = \dfrac{\gamma_{M2}}{f_{ub}} \max\!\left( \dfrac{T_{max}}{0.9},\ \dfrac{V_b}{\alpha_v} + \dfrac{T_{max}}{1.26} \right)" />
+
+The calculator then returns the smallest coarse metric size whose tensile stress area is at least this value.
+
+## Preload and tightening
+
+A joint like this should be preloaded so the plate stays clamped and the bolts are not cycled by the load.
+
+<Formula tex="F_p = 0.7\, f_{ub}\, A_s, \qquad T_{tight} = K\, F_p\, d" />
+
+If F_p is larger than T_max the plate does not lift off, and the bolt only sees a small fraction of the external load. The ratio F_p / T_max is reported as a check.
+
+## Variables
+
+| Symbol | Meaning | Unit |
+| ------ | ------- | ---- |
+| m, g | Object mass, 9.81 m/s² | kg, m/s² |
+| a | Distance support edge to object CG | mm |
+| L, b, t | Plate overhang, width, thickness | mm |
+| γ_F | Load factor | – |
+| M_d | Design moment about the support edge | N·m |
+| c, p, k, n | First row distance, row pitch, bolts per row, rows | mm, mm, –, – |
+| T_max, V_b | Design tension and shear on the worst bolt | N |
+| f_ub | Ultimate strength of bolt (100 × first number of class) | MPa |
+| A_s | Tensile stress area | mm² |
+| K | Torque coefficient | – |
+
+## Assumptions and limits
+
+- Rigid plate rotating about the support edge, no prying beyond what that model gives. A thin or flexible plate gets extra prying force at the bolts, so check plate bending separately.
+- Bolts are equal in size and the load is static or quasi-static. **Fatigue is not checked**: for cyclic loading use VDI 2230 with preload and joint stiffnesses.
+- Friction between plate and support is ignored for shear (conservative).
+- The object's weight acts at one point. For a distributed object, use its centre of gravity.
+- The pattern is symmetric about the plate centreline, so there is no twist.
+- Bearing of the plate on the bolt, edge distances and the strength of the support itself are not checked.
+- Plate self-weight on the supported side is neglected (it helps, slightly).
+
+## Reference
+
+EN 1993-1-8:2005 Table 3.4 and 3.6.1; ISO 898-1 (stress area, property classes); VDI 2230 (preload, fatigue).

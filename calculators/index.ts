@@ -2,6 +2,7 @@ import type { CalcModule } from '@/lib/types';
 import axialStress from './mechanical/axial-stress';
 import beamDeflection from './mechanical/beam-deflection-simple';
 import boltShear from './mechanical/bolt-shear';
+import cantileverPlateBolts from './mechanical/cantilever-plate-bolts';
 import threadFit8un from './mechanical/thread-fit-8un';
 import concreteVolume from './civil/concrete-volume';
 import unitLength from './civil/unit-converter-length';
@@ -11,6 +12,7 @@ export const calculators: CalcModule[] = [
   axialStress,
   beamDeflection,
   boltShear,
+  cantileverPlateBolts,
   threadFit8un,
   concreteVolume,
   unitLength,

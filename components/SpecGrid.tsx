@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { create, all, type MathJsInstance } from 'mathjs';
 import { RotateCcw } from 'lucide-react';
 import { CopyButton } from './CopyButton';
@@ -15,6 +15,8 @@ import {
 } from '@/lib/spec';
 
 const math: MathJsInstance = create(all, {});
+// Keep a handle on evaluate before it is disabled below (math.js "expressions security" pattern).
+const limitedEvaluate = math.evaluate;
 // Lock down evaluation: disable imports & loading from strings.
 math.import(
   {
@@ -63,7 +65,7 @@ function evaluateRows(
   for (const row of rows) {
     if (isFormulaRow(row)) {
       try {
-        const result = math.evaluate(row.formula, scope);
+        const result = limitedEvaluate(row.formula, scope);
         const num = typeof result === 'number' ? result : Number(result);
         if (!Number.isFinite(num)) {
           errors[row.id] = 'Not a finite number';
@@ -156,8 +158,18 @@ export function SpecGrid({ spec }: SpecGridProps) {
                 const isResult = !isInput && (row as SpecFormulaRow).highlight;
                 const error = errors[row.id];
                 return (
+                  <Fragment key={row.id}>
+                  {row.section && (
+                    <tr className="border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40">
+                      <th
+                        colSpan={3}
+                        className="text-left px-4 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400"
+                      >
+                        {row.section}
+                      </th>
+                    </tr>
+                  )}
                   <tr
-                    key={row.id}
                     className={
                       'border-t border-slate-100 dark:border-slate-800/60 ' +
                       (isResult ? 'bg-accent-50/60 dark:bg-accent-900/10 font-medium' : '')
@@ -187,6 +199,7 @@ export function SpecGrid({ spec }: SpecGridProps) {
                     </td>
                     <td className="px-4 py-2 text-slate-500 dark:text-slate-400">{row.unit ?? ''}</td>
                   </tr>
+                  </Fragment>
                 );
               })}
             </tbody>

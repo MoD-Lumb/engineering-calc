@@ -11,6 +11,8 @@ export interface SpecInputRow {
   max?: number;
   step?: number;
   highlight?: boolean;
+  /** Optional section heading rendered above this row. */
+  section?: string;
 }
 
 export interface SpecFormulaRow {
@@ -21,6 +23,8 @@ export interface SpecFormulaRow {
   note?: string;
   highlight?: boolean;
   digits?: number;
+  /** Optional section heading rendered above this row. */
+  section?: string;
 }
 
 export type SpecRow = SpecInputRow | SpecFormulaRow;

@@ -1,0 +1,311 @@
+slug: cantilever-plate-bolts
+name: Cantilever plate bolts
+category: mechanical
+description: Bolt tension, shear and size check for a plate bolted at one end that carries an object at the free end (EN 1993-1-8 bolt resistances).
+status: live
+tags:
+  - bolt
+  - cantilever
+  - plate
+  - moment
+  - tension
+  - shear
+  - fastener
+  - EN 1993-1-8
+
+rows:
+  # ---------------------------------------------------------------- loads
+  - id: m_obj
+    section: Load
+    label: Object mass
+    input: 200
+    unit: kg
+    note: Mass of the object resting on the free end.
+
+  - id: arm
+    label: Object CG distance from support edge
+    input: 450
+    unit: mm
+    note: |
+      Measured along the plate from the edge of the support (the pivot the plate tries to rotate about) to the object's centre of gravity.
+
+  - id: gF
+    label: Load factor
+    input: 1.5
+    min: 1
+    unit: "-"
+    note: |
+      Partial / dynamic factor applied to all loads. 1.5 = EN 1990 variable action. Use a higher value for impact, crane handling or vibration.
+
+  - id: H_par
+    label: Extra force parallel to the joint (unfactored)
+    input: 0
+    unit: N
+    note: |
+      Horizontal load on the object (acceleration, wind, drag). Carried by bolt shear, friction is ignored.
+
+  - id: wall
+    label: Mounting (0 = plate lies on support, 1 = plate on wall)
+    input: 0
+    min: 0
+    max: 1
+    step: 1
+    unit: "0 / 1"
+    note: |
+      0: bolts are parallel to the object's weight (plate on a table or beam) - weight loads the bolts in tension only.
+      1: bolts are perpendicular to the weight (plate on a wall) - the full weight is also carried as bolt shear.
+
+  # ---------------------------------------------------------------- plate
+  - id: t_pl
+    section: Plate (self-weight of the overhang)
+    label: Plate thickness
+    input: 12
+    unit: mm
+
+  - id: b_pl
+    label: Plate width
+    input: 200
+    unit: mm
+
+  - id: L_pl
+    label: Overhang length (support edge to free end)
+    input: 550
+    unit: mm
+    note: Steel, 7850 kg/m³. Weight acts at half the overhang.
+
+  # ---------------------------------------------------------------- bolt pattern
+  - id: k_row
+    section: Bolt pattern (measured from the support edge)
+    label: Bolts per row
+    input: 2
+    min: 1
+    step: 1
+    unit: pcs
+    note: Number of bolts across the plate width in each row.
+
+  - id: n_row
+    label: Number of rows
+    input: 2
+    min: 1
+    step: 1
+    unit: pcs
+    note: Rows of bolts in the direction of the cantilever.
+
+  - id: c_edge
+    label: Distance support edge - first row
+    input: 40
+    unit: mm
+    note: Bolts close to the edge have a short lever arm and carry more load.
+
+  - id: p_row
+    label: Row pitch
+    input: 80
+    unit: mm
+    note: Ignored when there is one row.
+
+  # ---------------------------------------------------------------- bolt
+  - id: d_nom
+    section: Bolt (trial size)
+    label: Nominal diameter
+    input: 12
+    unit: mm
+    note: Metric ISO coarse thread, e.g. 12 for M12.
+
+  - id: p_thr
+    label: Thread pitch
+    input: 1.75
+    unit: mm
+    note: |
+      Coarse pitch: M6 1.0, M8 1.25, M10 1.5, M12 1.75, M14 2.0, M16 2.0, M20 2.5, M24 3.0, M30 3.5.
+
+  - id: pc
+    label: Property class
+    input: 8.8
+    unit: "-"
+    note: |
+      Enter as printed on the head, e.g. 8.8, 10.9, 12.9, 4.6.
+      f_ub = 100 · (first number) MPa, f_yb = f_ub · (second number / 10).
+
+  - id: K_t
+    label: Torque coefficient K
+    input: 0.2
+    unit: "-"
+    note: 0.2 for plain or lightly oiled steel. Lower with a lubricant or coating, so check the supplier's data.
+
+  # ================================================================ results
+  - id: W_obj
+    section: Applied loads
+    label: Object weight
+    formula: m_obj * 9.81
+    unit: N
+    digits: 1
+    note: W = m · g, with g = 9.81 m/s².
+
+  - id: W_pl
+    label: Plate overhang weight
+    formula: 7850 * t_pl * b_pl * L_pl * 1e-9 * 9.81
+    unit: N
+    digits: 1
+
+  - id: P_d
+    label: Design vertical load
+    formula: gF * (W_obj + W_pl)
+    unit: N
+    digits: 1
+
+  - id: M_d
+    label: Design moment about support edge
+    formula: gF * (W_obj * arm + W_pl * L_pl / 2) / 1000
+    unit: N·m
+    digits: 1
+    note: M = γ_F · (W_obj · a + W_pl · L / 2)
+
+  - id: n_b
+    label: Total number of bolts
+    formula: k_row * n_row
+    unit: pcs
+    digits: 0
+
+  - id: S2
+    label: Sum of squared lever arms per row
+    formula: n_row * c_edge^2 + c_edge * p_row * n_row * (n_row - 1) + p_row^2 * (n_row - 1) * n_row * (2 * n_row - 1) / 6
+    unit: mm²
+    digits: 0
+    note: Σ b_i² for one row of bolts, where b_i = c + (i-1)·p.
+
+  - id: b_max
+    label: Lever arm of outermost bolt
+    formula: c_edge + (n_row - 1) * p_row
+    unit: mm
+    digits: 1
+
+  - id: T_max
+    section: Load on the most loaded bolt
+    label: Design tension per bolt
+    formula: M_d * 1000 * b_max / (k_row * S2)
+    unit: N
+    digits: 0
+    highlight: true
+    note: |
+      T = M · b_max / (k · Σ b_i²)
+      Plate assumed rigid and rotating about the support edge, bolt force proportional to distance.
+
+  - id: V_b
+    label: Design shear per bolt
+    formula: (gF * H_par + wall * P_d) / n_b
+    unit: N
+    digits: 0
+    highlight: true
+    note: Shared equally between all bolts.
+
+  # ---------------------------------------------------------------- bolt data
+  - id: fub
+    section: Bolt properties
+    label: Ultimate strength
+    formula: 100 * floor(pc)
+    unit: MPa
+    digits: 0
+
+  - id: fyb
+    label: Yield strength
+    formula: round(fub * (pc - floor(pc)))
+    unit: MPa
+    digits: 0
+
+  - id: As
+    label: Tensile stress area
+    formula: pi / 4 * (d_nom - 0.9382 * p_thr)^2
+    unit: mm²
+    digits: 1
+    note: ISO 898-1 / DIN 13, A_s = π/4 · ((d₂ + d₃)/2)² = π/4 · (d - 0.9382 P)².
+
+  - id: Ft_Rd
+    label: Tension resistance
+    formula: 0.9 * fub * As / 1.25
+    unit: N
+    digits: 0
+    note: EN 1993-1-8 Table 3.4, F_t,Rd = k₂ · f_ub · A_s / γ_M2, with k₂ = 0.9, γ_M2 = 1.25.
+
+  - id: alpha_v
+    label: Shear factor alpha_v
+    formula: "(pc == 4.6 or pc == 5.6 or pc == 8.8) ? 0.6 : 0.5"
+    unit: "-"
+    digits: 1
+    note: 0.6 for classes 4.6, 5.6, 8.8, otherwise 0.5 (4.8, 5.8, 6.8, 10.9, and 12.9 taken conservatively).
+
+  - id: Fv_Rd
+    label: Shear resistance (thread in shear plane)
+    formula: alpha_v * fub * As / 1.25
+    unit: N
+    digits: 0
+    note: F_v,Rd = α_v · f_ub · A_s / γ_M2. Conservative, assumes the shear plane goes through the thread.
+
+  # ---------------------------------------------------------------- checks
+  - id: U_t
+    section: Checks (must be ≤ 1.00)
+    label: Tension utilisation
+    formula: T_max / Ft_Rd
+    unit: "-"
+    digits: 2
+
+  - id: U_c
+    label: Shear + tension interaction
+    formula: V_b / Fv_Rd + T_max / (1.4 * Ft_Rd)
+    unit: "-"
+    digits: 2
+    note: EN 1993-1-8 Table 3.4, F_v,Ed / F_v,Rd + F_t,Ed / (1.4 · F_t,Rd) ≤ 1.
+
+  - id: U
+    label: Governing utilisation
+    formula: max(U_t, U_c)
+    unit: "-"
+    digits: 2
+    highlight: true
+    note: Bolt is adequate when ≤ 1.00.
+
+  - id: SF_y
+    label: Safety factor against yield in tension
+    formula: fyb * As * gF / T_max
+    unit: "-"
+    digits: 2
+    note: Unfactored load against f_yb · A_s, for a machine-design style check. Preload is not included.
+
+  # ---------------------------------------------------------------- sizing
+  - id: As_req
+    section: Sizing and assembly
+    label: Required tensile stress area
+    formula: 1.25 / fub * max(T_max / 0.9, V_b / alpha_v + T_max / 1.26)
+    unit: mm²
+    digits: 1
+    note: Smallest A_s that makes utilisation = 1 at this property class and load.
+
+  - id: d_min
+    label: Smallest coarse metric bolt (M…)
+    formula: "As_req <= 20.1 ? 6 : As_req <= 36.6 ? 8 : As_req <= 58 ? 10 : As_req <= 84.3 ? 12 : As_req <= 115 ? 14 : As_req <= 157 ? 16 : As_req <= 192 ? 18 : As_req <= 245 ? 20 : As_req <= 303 ? 22 : As_req <= 353 ? 24 : As_req <= 459 ? 27 : As_req <= 561 ? 30 : As_req <= 694 ? 33 : As_req <= 817 ? 36 : As_req <= 976 ? 39 : As_req <= 1120 ? 42 : 0"
+    unit: mm
+    digits: 0
+    highlight: true
+    note: |
+      By strength only. 0 means larger than M42.
+      In practice choose a size giving edge distances and tightening access, and do not go below M8 for structural joints.
+
+  - id: Fp
+    label: Recommended preload
+    formula: 0.7 * fub * As
+    unit: N
+    digits: 0
+    note: F_p,C = 0.7 · f_ub · A_s (EN 1993-1-8 3.6.1).
+
+  - id: T_tight
+    label: Tightening torque for this preload
+    formula: K_t * Fp * d_nom / 1000
+    unit: N·m
+    digits: 0
+    note: T = K · F_p · d.
+
+  - id: sep
+    label: Preload / design tension per bolt
+    formula: Fp / max(T_max, 1)
+    unit: "-"
+    digits: 1
+    note: A value above 1 means the plate stays clamped to the support under load (no gap opens at the bolts), so the bolt sees only a small fraction of the external load.

@@ -1,0 +1,33 @@
+## Example 1 — Machine on a steel shelf plate
+
+A 200 kg machine sits on a 12 mm steel plate (200 mm wide, overhang 550 mm). The plate is bolted down by 2 rows of 2 bolts. The first row is 40 mm and the second 120 mm behind the support edge. The machine's centre of gravity is 450 mm from the edge. Load factor 1.5, trial bolt M12 class 8.8.
+
+**Loads:**
+
+<Formula tex="W = 200 \cdot 9.81 = 1962\ \text{N}, \qquad W_{pl} = 7850\cdot 0.012\cdot 0.2\cdot 0.55\cdot 9.81 \approx 102\ \text{N}" />
+
+<Formula tex="M_d = 1.5\,(1962 \cdot 0.45 + 102 \cdot 0.275) \approx 1366\ \text{N·m}" />
+
+**Worst bolt (farthest row, 120 mm):**
+
+<Formula tex="\sum b_i^2 = 40^2 + 120^2 = 16\,000\ \text{mm}^2, \qquad T_{max} = \dfrac{1\,366\,281 \cdot 120}{2 \cdot 16\,000} \approx 5124\ \text{N}" />
+
+**Resistance of M12 8.8** (A_s = 84.3 mm², f_ub = 800 MPa):
+
+<Formula tex="F_{t,Rd} = \dfrac{0.9 \cdot 800 \cdot 84.3}{1.25} \approx 48.5\ \text{kN} \quad\Rightarrow\quad \dfrac{T_{max}}{F_{t,Rd}} \approx 0.11" />
+
+Utilisation 0.11, so the bolt is far from its limit. The minimum bolt by strength is M6 (A_s,req ≈ 8.9 mm²).
+
+For a 200 kg machine on a long overhang M10 or M12 is still the sensible choice, because of the plate's bending and prying and for handling robustness. Tighten to about **113 N·m** (K = 0.2) for a preload of 47 kN, which is about 9× the external tension, so the plate stays clamped.
+
+## Example 2 — Same plate, mounted on a wall
+
+Set **Mounting = 1** with a 500 kg object at 600 mm, three rows of three bolts (c = 50 mm, p = 70 mm), M16 class 10.9 and 2 kN of horizontal load. Each bolt now sees tension 5.3 kN and shear 1.17 kN. The utilisation is 0.05.
+
+## Example 3 — Sanity check on the lever
+
+One row of two bolts 40 mm behind the edge, 100 kg at 400 mm, γ_F = 1.0:
+
+<Formula tex="T = \dfrac{981 \cdot 400}{2 \cdot 40} = 4905\ \text{N per bolt}" />
+
+With a / c = 10 the two bolts together pull down with ten times the weight. Moving the bolts further from the edge, or adding a second row, reduces it quickly.
