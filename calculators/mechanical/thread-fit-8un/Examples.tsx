@@ -1,5 +1,5 @@
 import { Formula } from '@/components/Formula';
-import { SIZES_8UN, computeFit, fmtIn, fmtMm, roundTo } from './b11';
+import { SIZES_8UN, applyNutOversize, computeFit, fmtIn, fmtMm, roundTo } from './b11';
 import {
   BOLT_GRADES,
   LBF_PER_KN,
@@ -7,6 +7,8 @@ import {
   boltGradeProps,
   boltLengths,
   computeStrength,
+  maxOversize,
+  requiredOversize,
 } from './strength';
 
 /** Worked example, computed live from the same functions as the calculator. */
@@ -32,6 +34,15 @@ export default function Examples() {
   const sm = r.strip.LMC;
   const mm = r.fit.MMC;
   const lm = r.fit.LMC;
+
+  // Example 3: nut oversize at 90 % of the yield load
+  const F3 = 0.9 * r.Fy;
+  const r3 = computeStrength(f, lens, F3, bm, nm);
+  const req3 = requiredOversize(f, F3, r3.As, bm.E, bm.nu, lens.LE);
+  const f3 = applyNutOversize(f, req3.rounded);
+  const r3o = computeStrength(f3, lens, F3, bm, nm);
+  const max3 = maxOversize(f, lens, F3, bm, nm);
+  const gov = (rr: typeof r) => Math.max(rr.strip.LMC.utilBolt, rr.strip.LMC.utilNut);
 
   return (
     <div className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
@@ -192,6 +203,45 @@ export default function Examples() {
       <blockquote className="border-l-2 border-accent-400 pl-3 text-slate-600 dark:text-slate-400 italic">
         In the Calculator tab set the load to {kN(F)} kN, choose “MMC pair”, press “Apply load in 3D” and then
         “Thread detail”. The magenta fill at the far end of the nut is the interference.
+      </blockquote>
+
+      <h3 className="pt-4 text-base font-semibold text-slate-900 dark:text-slate-100">
+        Example 3 — nut oversize at 90 % of the yield load ({kip(F3)} kip, {kN(F3)} kN)
+      </h3>
+      <p>
+        Same joint, MMC bolt in MMC nut. ε = {(r3.epsT * 1e6).toFixed(0)} µε, so the pitch grows by{' '}
+        {x(r3.fit.MMC.growth, 5)} in over L<sub>E</sub>. The axial play a = {x(r3.fit.MMC.a, 5)} in and the Poisson gain
+        p = {x(r3.fit.MMC.p, 5)} in are not enough: the back-flank gap is {x(r3.fit.MMC.gapEnd, 5)} in, i.e.
+        interference.
+      </p>
+      <Formula
+        tex={`\\Delta_{req} = 1.732\\cdot ${x(-r3.fit.MMC.gapEnd, 5)} = ${x(req3.exact, 5)}\\ \\text{in} \\;\\rightarrow\\; ${x(req3.rounded, 3)}\\ \\text{in}`}
+      />
+      <p>
+        With the nut overtapped by {x(req3.rounded, 3)} in (D₂ {x(f.int.pitchMin)} → {x(f3.int.pitchMin)} in, D₁{' '}
+        {x(f.int.minorMin)} → {x(f3.int.minorMin)} in):
+      </p>
+      <ul className="list-disc pl-5 space-y-1">
+        <li>
+          back-flank gap {x(r3o.fit.MMC.gapEnd, 5)} in — no interference; onset moves from {kip(r3.fit.MMC.Fint)} to{' '}
+          {kip(r3o.fit.MMC.Fint)} kip
+        </li>
+        <li>
+          LMC/LMC radial engagement {x(f.clearance.engagement.min)} → {x(f3.clearance.engagement.min)} in (
+          {((f3.clearance.engagement.min / f.basicEngagement) * 100).toFixed(0)} % of basic)
+        </li>
+        <li>
+          nut-thread shear area {r3.strip.LMC.ANut.toFixed(3)} → {r3o.strip.LMC.ANut.toFixed(3)} in², governing stripping
+          utilisation {(gov(r3) * 100).toFixed(0)} → {(gov(r3o) * 100).toFixed(0)} %
+        </li>
+        <li>
+          required engagement {x(r3.LEreq)} → {x(r3o.LEreq)} in (available {x(lens.LE)} in). The largest oversize that
+          keeps the bolt failing first is {x(max3)} in, so the acceptable range is {x(req3.rounded, 3)} … {x(max3)} in.
+        </li>
+      </ul>
+      <blockquote className="border-l-2 border-accent-400 pl-3 text-slate-600 dark:text-slate-400 italic">
+        In the Calculator tab press “90% F<sub>y</sub>”, choose “MMC pair”, apply the load, then press “Set to required”
+        in the Nut oversize panel. The interference markers disappear and the before/after table shows the cost.
       </blockquote>
     </div>
   );

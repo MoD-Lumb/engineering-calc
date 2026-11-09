@@ -83,12 +83,12 @@ export function effectiveGrip(lc: LoadCase, D: number): number {
 /* Formatting                                                                */
 /* ------------------------------------------------------------------------ */
 
-type Sys = 'imp' | 'si';
-interface Q {
+export type Sys = 'imp' | 'si';
+export interface Q {
   imp: string;
   si: string;
 }
-const q = {
+export const q = {
   force: (lbf: number): Q => ({ imp: `${(lbf / 1000).toFixed(1)} kip`, si: `${(lbf / LBF_PER_KN).toFixed(1)} kN` }),
   stress: (psi: number): Q => ({
     imp: `${(psi / 1000).toFixed(1)} ksi`,
@@ -102,7 +102,7 @@ const q = {
   text: (t: string): Q => ({ imp: t, si: t }),
 };
 
-function Val({ v, sys }: { v: Q; sys: Sys }) {
+export function Val({ v, sys }: { v: Q; sys: Sys }) {
   const [a, b] = sys === 'si' ? [v.si, v.imp] : [v.imp, v.si];
   return (
     <span className="inline-flex flex-col items-end leading-tight">
@@ -138,11 +138,11 @@ export function StatusBadge({ util, labels }: { util: number; labels?: [string, 
 /* Inputs                                                                    */
 /* ------------------------------------------------------------------------ */
 
-const inputCls =
+export const inputCls =
   'rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-sm font-mono text-right focus:outline-none focus:ring-2 focus:ring-accent-500';
-const labelCls = 'block text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1';
+export const labelCls = 'block text-[11px] uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1';
 
-function Num({
+export function Num({
   value,
   onChange,
   width = 'w-20',

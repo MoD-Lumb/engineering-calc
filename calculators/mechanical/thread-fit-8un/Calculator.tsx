@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { AlertTriangle, Crosshair, Maximize2, Move3d, RectangleHorizontal } from 'lucide-react';
-import { SIZES_8UN, computeFit, fmtIn } from './b11';
+import { SIZES_8UN, applyNutOversize, computeFit, fmtIn } from './b11';
 import { visualDims, type Cond } from './geometry';
 import { ProfileDetail } from './ProfileDetail';
 import { ToleranceTables } from './ToleranceTables';
@@ -19,6 +19,7 @@ import {
   type LoadCase,
 } from './StrengthPanel';
 import { boltLengths, computeStrength, flankFit, stretchParams } from './strength';
+import { DEFAULT_OVERSIZE, MAX_OVERSIZE_INPUT, OversizePanel, type OversizeState } from './OversizePanel';
 import {
   DEFAULT_VIS,
   PALETTE,
@@ -168,6 +169,7 @@ export default function ThreadFitCalculator() {
   const [vis, setVis] = useState<Visibility>(DEFAULT_VIS);
   const [view, setView] = useState<{ kind: ViewKind; n: number }>({ kind: 'iso', n: 0 });
   const [lc, setLc] = useState<LoadCase>(DEFAULT_LOAD_CASE);
+  const [os, setOs] = useState<OversizeState>(DEFAULT_OVERSIZE);
   const [hydrated, setHydrated] = useState(false);
   const dark = useDarkMode();
 
@@ -175,11 +177,23 @@ export default function ThreadFitCalculator() {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const saved = JSON.parse(raw) as { D?: number; k?: number; lc?: Partial<LoadCase> };
+        const saved = JSON.parse(raw) as {
+          D?: number;
+          k?: number;
+          lc?: Partial<LoadCase>;
+          os?: Partial<OversizeState>;
+        };
         if (saved.D && SIZES_8UN.some((s) => s.D === saved.D)) setSizeD(saved.D);
         if (saved.k && saved.k >= 1 && saved.k <= 5) setK(saved.k);
         if (saved.lc && typeof saved.lc === 'object') {
           setLc({ ...DEFAULT_LOAD_CASE, ...saved.lc, applied: false });
+        }
+        if (saved.os && typeof saved.os === 'object') {
+          const d = Number(saved.os.delta);
+          setOs({
+            on: !!saved.os.on,
+            delta: Number.isFinite(d) ? Math.min(Math.max(d, 0), MAX_OVERSIZE_INPUT) : DEFAULT_OVERSIZE.delta,
+          });
         }
       }
     } catch {
@@ -191,14 +205,20 @@ export default function ThreadFitCalculator() {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ D: sizeD, k, lc: { ...lc, applied: false } }));
+      window.localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ D: sizeD, k, lc: { ...lc, applied: false }, os })
+      );
     } catch {
       // ignore
     }
-  }, [sizeD, k, lc, hydrated]);
+  }, [sizeD, k, lc, os, hydrated]);
 
   const size = SIZES_8UN.find((s) => s.D === sizeD) ?? SIZES_8UN[1];
-  const fit = useMemo(() => computeFit(size), [size]);
+  const fitBase = useMemo(() => computeFit(size), [size]);
+  // nut oversize (whole thread form) — everything below uses the possibly oversized fit
+  const osDelta = os.on && Number.isFinite(os.delta) ? Math.min(Math.max(os.delta, 0), MAX_OVERSIZE_INPUT) : 0;
+  const fit = useMemo(() => (osDelta > 0 ? applyNutOversize(fitBase, osDelta) : fitBase), [fitBase, osDelta]);
 
   // radial engagement as drawn at LMC/LMC — warns when exaggeration makes threads disengage
   const drawnEngagement = useMemo(() => {
@@ -209,13 +229,22 @@ export default function ThreadFitCalculator() {
   // ---- working load
   const grip = effectiveGrip(lc, fit.D);
   const lens = useMemo(() => boltLengths(fit.D, fit.P, grip), [fit, grip]);
-  const boltMat = resolveBolt(lc, fit.D);
-  const nutMat = resolveNut(lc);
+  const boltRaw = resolveBolt(lc, fit.D);
+  const nutRaw = resolveNut(lc);
+  const boltMat = useMemo(
+    () => boltRaw,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [boltRaw.Sy, boltRaw.Su, boltRaw.E, boltRaw.nu, boltRaw.covered, boltRaw.name]
+  );
+  const nutMat = useMemo(
+    () => ({ Sy: nutRaw.Sy, Su: nutRaw.Su }),
+    [nutRaw.Sy, nutRaw.Su]
+  );
   const Flbf = Math.max(0, forceLbf(lc) || 0);
   const res = useMemo(
     () =>
-      computeStrength(fit, lens, Flbf, { ...boltMat }, { Sy: nutMat.Sy, Su: nutMat.Su }),
-    [fit, lens, Flbf, boltMat.Sy, boltMat.Su, boltMat.E, boltMat.nu, nutMat.Sy, nutMat.Su]
+      computeStrength(fit, lens, Flbf, boltMat, nutMat),
+    [fit, lens, Flbf, boltMat, nutMat]
   );
   // the 3D / 2D pictures use the outermost visible bolt and innermost visible nut
   const pairBolt: Cond = vis.boltMMC || !vis.boltLMC ? 'MMC' : 'LMC';
@@ -303,6 +332,17 @@ export default function ThreadFitCalculator() {
         res={res}
         lens={lens}
         pair={{ bolt: pairBolt, nut: pairNut, gapEnd: pairFit.gapEnd }}
+      />
+
+      <OversizePanel
+        fitBase={fitBase}
+        lens={lens}
+        F={Flbf}
+        bolt={boltMat}
+        nut={nutMat}
+        os={os}
+        setOs={setOs}
+        sys={lc.unit === 'kN' ? 'si' : 'imp'}
       />
 
       {/* 3D viewer */}

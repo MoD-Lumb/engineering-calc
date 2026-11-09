@@ -12,7 +12,7 @@
  *     first engaged thread bears on its loaded flank, and the pitch growth
  *     ε·LE is compared with the axial flank play of the pair.
  */
-import { TAN30, type ThreadFit } from './b11';
+import { TAN30, applyNutOversize, type ThreadFit } from './b11';
 import type { Cond } from './geometry';
 
 /* ------------------------------------------------------------------------ */
@@ -419,6 +419,57 @@ export function computeStrength(
       LMC: flankFit(fit, 'LMC', 'LMC', F, As, bolt.E, bolt.nu, lens.LE),
     },
   };
+}
+
+/* ------------------------------------------------------------------------ */
+/* Nut oversize                                                              */
+/* ------------------------------------------------------------------------ */
+
+/**
+ * Smallest diametral nut oversize that removes flank interference for the
+ * MMC bolt in the MMC nut (worst case) at load F: the back-flank gap grows by
+ * Δ·tan 30°, so Δ = max(0, ε·LE − a − p)·cot 30°. Rounded up to 0.001 in.
+ * `fit` must be the standard (not oversized) fit.
+ */
+export function requiredOversize(
+  fit: ThreadFit,
+  F: number,
+  As: number,
+  E: number,
+  nu: number,
+  LE: number
+): { exact: number; rounded: number } {
+  const ff = flankFit(fit, 'MMC', 'MMC', F, As, E, nu, LE);
+  const exact = Math.max(0, -ff.gapEnd) / TAN30;
+  const rounded = exact > 0 ? Math.ceil(exact * 1000 - 1e-9) / 1000 : 0;
+  return { exact, rounded };
+}
+
+/**
+ * Largest oversize for which the bolt still breaks before the threads strip
+ * (B1.1 App. B required engagement ≤ available LE, least-material limits).
+ * Returns 0 if even the standard nut does not satisfy it, and the search cap
+ * (0.1 in) if it is satisfied over the whole range.
+ */
+export function maxOversize(
+  fit: ThreadFit,
+  lens: BoltLengths,
+  F: number,
+  bolt: BoltProps,
+  nut: { Su: number; Sy: number },
+  cap = 0.1
+): number {
+  const ok = (d: number) => computeStrength(applyNutOversize(fit, d), lens, F, bolt, nut).LEreq <= lens.LE;
+  if (!ok(0)) return 0;
+  if (ok(cap)) return cap;
+  let lo = 0;
+  let hi = cap;
+  for (let i = 0; i < 40; i++) {
+    const mid = (lo + hi) / 2;
+    if (ok(mid)) lo = mid;
+    else hi = mid;
+  }
+  return lo;
 }
 
 /* ------------------------------------------------------------------------ */

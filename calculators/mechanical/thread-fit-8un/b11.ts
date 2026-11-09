@@ -114,14 +114,33 @@ export interface ThreadFit {
   basicEngagement: number;
   ext: ExternalLimits;
   int: InternalLimits;
-  clearance: {
-    major: Range;
-    pitch: Range;
-    minor: Range;
-    /** Total axial play (backlash) along the axis, flanks centred: ΔE·tan 30° */
-    axialPlay: Range;
-    /** Radial depth of thread engagement (bolt major vs nut minor) */
-    engagement: Range;
+  /** Diametral oversize applied to the whole nut thread form (0 = standard 2B) */
+  nutOversize: number;
+  clearance: Clearance;
+}
+
+export interface Clearance {
+  major: Range;
+  pitch: Range;
+  minor: Range;
+  /** Total axial play (backlash) along the axis, flanks centred: ΔE·tan 30° */
+  axialPlay: Range;
+  /** Radial depth of thread engagement (bolt major vs nut minor) */
+  engagement: Range;
+}
+
+export function clearanceOf(ext: ExternalLimits, int: InternalLimits): Clearance {
+  const r4 = (x: number) => roundTo(x, 4);
+  const pitch = { min: r4(int.pitchMin - ext.pitchMax), max: r4(int.pitchMax - ext.pitchMin) };
+  return {
+    major: { min: r4(int.majorMin - ext.majorMax), max: r4(int.majorMaxRef - ext.majorMin) },
+    pitch,
+    minor: { min: r4(int.minorMin - ext.minorMaxUNR), max: r4(int.minorMax - ext.minorMinRef) },
+    axialPlay: { min: pitch.min * TAN30, max: pitch.max * TAN30 },
+    engagement: {
+      min: (ext.majorMin - int.minorMax) / 2,
+      max: (ext.majorMax - int.minorMin) / 2,
+    },
   };
 }
 
@@ -178,9 +197,6 @@ export function computeFit(size: ThreadSize, tpi = 8): ThreadFit {
     majorMaxRef: roundTo(intPitchMax + 0.649519 * P, 4),
   };
 
-  const r4 = (x: number) => roundTo(x, 4);
-  const pitchClr = { min: r4(int.pitchMin - ext.pitchMax), max: r4(int.pitchMax - ext.pitchMin) };
-
   return {
     size,
     tpi,
@@ -196,16 +212,38 @@ export function computeFit(size: ThreadSize, tpi = 8): ThreadFit {
     basicEngagement: (5 / 8) * H,
     ext,
     int,
-    clearance: {
-      major: { min: r4(int.majorMin - ext.majorMax), max: r4(int.majorMaxRef - ext.majorMin) },
-      pitch: pitchClr,
-      minor: { min: r4(int.minorMin - ext.minorMaxUNR), max: r4(int.minorMax - ext.minorMinRef) },
-      axialPlay: { min: pitchClr.min * TAN30, max: pitchClr.max * TAN30 },
-      engagement: {
-        min: (ext.majorMin - int.minorMax) / 2,
-        max: (ext.majorMax - int.minorMin) / 2,
-      },
-    },
+    nutOversize: 0,
+    clearance: clearanceOf(ext, int),
+  };
+}
+
+/**
+ * Nut tapped oversize: the whole internal thread form (minor, pitch and major
+ * diameter limits) is enlarged by the diametral amount `delta`, as for
+ * overtapped (e.g. galvanized) nuts. The result is no longer a gauge-conforming
+ * class 2B thread. Applied to a standard fit (nutOversize = 0).
+ */
+export function applyNutOversize(fit: ThreadFit, delta: number): ThreadFit {
+  const base = fit.nutOversize ? fit.nutOversize : 0;
+  const d = delta - base;
+  if (Math.abs(delta) < 1e-12 && base === 0) return fit;
+  const r4 = (x: number) => roundTo(x, 4);
+  const i = fit.int;
+  const int: InternalLimits = {
+    ...i,
+    minorMin: r4(i.minorMin + d),
+    minorMax: r4(i.minorMax + d),
+    pitchMin: r4(i.pitchMin + d),
+    pitchMax: r4(i.pitchMax + d),
+    majorMin: r4(i.majorMin + d),
+    majorMaxRef: r4(i.majorMaxRef + d),
+  };
+  return {
+    ...fit,
+    int,
+    nutOversize: delta,
+    designationInt: delta > 0 ? `${designation(fit.size, fit.tpi, '2B')} oversize +${delta.toFixed(4)}` : designation(fit.size, fit.tpi, '2B'),
+    clearance: clearanceOf(fit.ext, int),
   };
 }
 

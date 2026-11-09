@@ -164,6 +164,46 @@ threads, and steel E = 29 000 ksi (B8: 28 000 ksi) with ν = 0.3.
 VDI 2230 models the head and nut regions more realistically, with substitute
 lengths of about 0.4 d to 0.5 d.
 
+## Nut oversize (overtapping)
+
+If the stretched bolt interferes with the nut, the nut thread can be tapped
+**oversize**. The calculator enlarges the whole internal thread form — minor,
+pitch and major diameter limits — by the same diametral amount Δ, as is done
+for galvanized nuts:
+
+<Formula tex="D_1' = D_1 + \Delta \qquad D_2' = D_2 + \Delta \qquad D' = D + \Delta" />
+
+Each Δ of pitch diameter adds Δ·tan 30° of axial flank play, so the back-flank
+gap at the last engaged thread becomes:
+
+<Formula tex="g_{back} = a + p - \varepsilon L_E + \Delta \tan 30^\circ" />
+
+The smallest oversize that removes the interference is set by the worst case,
+an MMC bolt in an MMC nut at the working load. It is rounded up to 0.001 in:
+
+<Formula tex="\Delta_{req} = \max\left(0,\ \varepsilon L_E - a - p\right)\cot 30^\circ = 1.732\cdot i_{axial}" />
+
+This is the same relation B1.1 uses to convert a lead deviation into an
+equivalent pitch-diameter change.
+
+The oversize is not free:
+
+- radial thread engagement drops by Δ/2;
+- the nut-thread shear area drops (its (d − D₂ − Δ) term shrinks);
+- the bolt-thread shear area changes with the larger D₁ + Δ;
+- the B1.1 Appendix B required engagement length rises.
+
+The calculator therefore also finds the **largest** oversize for which the bolt
+still breaks before the threads strip (required L<sub>E</sub> ≤ available
+L<sub>E</sub>, least-material limits). It reports the acceptable range
+Δ<sub>req</sub> … Δ<sub>max</sub>. If the range is empty, oversize alone cannot
+fix the joint, and a thicker nut (longer engagement) or a lower load is needed.
+
+An oversized nut no longer gauges as class 2B. Specify it as a special, for
+example "1-1/8-8UN-2B oversize +0.003 in", and use matching gauges.
+Overtapping is standard practice for hot-dip galvanized nuts (ASTM A563 /
+A194), where the allowance accommodates the coating on the bolt.
+
 ## What the model shows
 
 - Threads are true helical 60° UN forms built from the limits above: a flat
