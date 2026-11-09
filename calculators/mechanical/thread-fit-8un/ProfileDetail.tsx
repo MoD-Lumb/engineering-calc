@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo } from 'react';
-import { fmtIn, type ThreadFit } from './b11';
+import { coatingActive, fmtIn, type CoatingSpec, type ThreadFit } from './b11';
 import {
   basicProfile,
   boltProfile,
   clipPolyline,
+  coatedDims,
   evalProfile,
   nutProfile,
   regionBetween,
@@ -39,13 +40,15 @@ interface Props {
   vis: Visibility;
   /** Working load applied: bolt displacement field (drawing units) and end of engagement */
   loaded?: { params: StretchParams; eB: number } | null;
+  /** Thread coating; `fit` holds the base-metal limits */
+  coat?: CoatingSpec;
 }
 
 /**
  * Axial section of the engaged threads over two pitches, drawn at 1:1 aspect,
  * using the same colours and toggles as the 3D view.
  */
-export function ProfileDetail({ fit, k, vis, loaded }: Props) {
+export function ProfileDetail({ fit, k, vis, loaded, coat }: Props) {
   const data = useMemo(() => {
     const { P, D, E, D1 } = fit;
     const dims = visualDims(fit, k);
@@ -57,6 +60,14 @@ export function ProfileDetail({ fit, k, vis, loaded }: Props) {
       MMC: nutProfile(dims.nut.MMC, P, 8),
       LMC: nutProfile(dims.nut.LMC, P, 8),
     };
+    const coated = coatingActive(coat);
+    const cd = coatedDims(dims, coat, k);
+    const boltS: Record<Cond, ProfileSample[]> = coated
+      ? { MMC: boltProfile(cd.bolt.MMC, P, 8, 8), LMC: boltProfile(cd.bolt.LMC, P, 8, 8) }
+      : bolt;
+    const nutS: Record<Cond, ProfileSample[]> = coated
+      ? { MMC: nutProfile(cd.nut.MMC, P, 8), LMC: nutProfile(cd.nut.LMC, P, 8) }
+      : nut;
     // unloaded: two pitches around a bolt crest; loaded: the last engaged threads
     const xc = loaded ? Math.floor((loaded.eB - P) / P) * P : 0;
     const s0 = xc - P;
@@ -78,17 +89,25 @@ export function ProfileDetail({ fit, k, vis, loaded }: Props) {
       );
       return clipPolyline(moved, s0, s1);
     };
+    // base-metal lines (fills) and coated surface lines (coating band, fit, outlines)
     const boltL = { MMC: boltLine(bolt.MMC), LMC: boltLine(bolt.LMC) };
     const nutL = { MMC: line(nut.MMC), LMC: line(nut.LMC) };
+    const boltSL = coated ? { MMC: boltLine(boltS.MMC), LMC: boltLine(boltS.LMC) } : boltL;
+    const nutSL = coated ? { MMC: line(nutS.MMC), LMC: line(nutS.LMC) } : nutL;
     const nutFill = (c: Cond) => path([...nutL[c], [s1, rMax], [s0, rMax]]) + 'Z';
     const boltFill = (c: Cond) => path([...boltL[c], [s1, rMin], [s0, rMin]]) + 'Z';
+    const nutCoatFill = (c: Cond) => path([...nutSL[c], [s1, rMax], [s0, rMax]]) + 'Z';
+    const boltCoatFill = (c: Cond) => path([...boltSL[c], [s1, rMin], [s0, rMin]]) + 'Z';
     const polys = (ps: Pt[][]) => ps.map((pp) => path(pp) + 'Z').join('');
-    const clr = (bc: Cond, nc: Cond) => polys(regionBetween(boltL[bc], nutL[nc], s0, s1));
-    const intf = (bc: Cond, nc: Cond) => polys(regionBetween(nutL[nc], boltL[bc], s0, s1));
+    const clr = (bc: Cond, nc: Cond) => polys(regionBetween(boltSL[bc], nutSL[nc], s0, s1));
+    const intf = (bc: Cond, nc: Cond) => polys(regionBetween(nutSL[nc], boltSL[bc], s0, s1, 1e-7));
     return {
       P,
       xc,
       intf,
+      coated,
+      nutCoatFill,
+      boltCoatFill,
       W,
       Hh,
       X,
@@ -98,10 +117,10 @@ export function ProfileDetail({ fit, k, vis, loaded }: Props) {
       boltFill,
       clr,
       lines: {
-        boltMMC: path(boltL.MMC),
-        boltLMC: path(boltL.LMC),
-        nutMMC: path(nutL.MMC),
-        nutLMC: path(nutL.LMC),
+        boltMMC: path(boltSL.MMC),
+        boltLMC: path(boltSL.LMC),
+        nutMMC: path(nutSL.MMC),
+        nutLMC: path(nutSL.LMC),
         basic: path(line(basicProfile(fit))),
       },
       refs: [
@@ -110,7 +129,7 @@ export function ProfileDetail({ fit, k, vis, loaded }: Props) {
         { r: D1 / 2, label: `D₁ = ${fmtIn(D1)}` },
       ],
     };
-  }, [fit, k, loaded]);
+  }, [fit, k, loaded, coat]);
 
   const { W, Hh, X, Y } = data;
   const labelW = W * 0.34;
@@ -127,14 +146,19 @@ export function ProfileDetail({ fit, k, vis, loaded }: Props) {
     >
       <rect x={0} y={0} width={W} height={Hh} className="fill-white dark:fill-slate-900" />
       {/* nut (top) — MMC first, LMC on top: the MMC colour remains only in the tolerance band */}
+      {/* each condition: coated region (coating colour), then its base metal on top → visible band = coating */}
+      {vis.nutMMC && data.coated && <path d={data.nutCoatFill('MMC')} className="fill-zinc-500 dark:fill-zinc-300" />}
       {vis.nutMMC && <path d={data.nutFill('MMC')} fill={PALETTE.nutMMC.fill} />}
+      {vis.nutLMC && data.coated && <path d={data.nutCoatFill('LMC')} className="fill-zinc-500 dark:fill-zinc-300" />}
       {vis.nutLMC && <path d={data.nutFill('LMC')} fill={PALETTE.nutLMC.fill} />}
+      {vis.boltMMC && data.coated && <path d={data.boltCoatFill('MMC')} className="fill-zinc-500 dark:fill-zinc-300" />}
       {vis.boltMMC && <path d={data.boltFill('MMC')} fill={PALETTE.boltMMC.fill} />}
+      {vis.boltLMC && data.coated && <path d={data.boltCoatFill('LMC')} className="fill-zinc-500 dark:fill-zinc-300" />}
       {vis.boltLMC && <path d={data.boltFill('LMC')} fill={PALETTE.boltLMC.fill} />}
       {vis.clearance && bc && nc && (
         <path d={data.clr(bc, nc)} fill={PALETTE.clearance} fillOpacity={0.9} />
       )}
-      {loaded && bc && nc && (
+      {bc && nc && (
         <path
           d={data.intf(bc, nc)}
           fill={PALETTE.interference}

@@ -342,12 +342,17 @@ export function flankFit(
   };
 }
 
+/**
+ * `fit` = base-metal limits (strength: As, stripping, required LE).
+ * `surface` = limits after coating (flank fit / interference); defaults to `fit`.
+ */
 export function computeStrength(
   fit: ThreadFit,
   lens: BoltLengths,
   F: number,
   bolt: BoltProps,
-  nut: { Su: number; Sy: number }
+  nut: { Su: number; Sy: number },
+  surface: ThreadFit = fit
 ): StrengthResult {
   const { D, tpi: n } = fit;
   const AsBasic = 0.7854 * (D - 0.9743 / n) ** 2;
@@ -415,8 +420,8 @@ export function computeStrength(
     dEngaged,
     dTotal: dShank + dThread + dEngaged,
     fit: {
-      MMC: flankFit(fit, 'MMC', 'MMC', F, As, bolt.E, bolt.nu, lens.LE),
-      LMC: flankFit(fit, 'LMC', 'LMC', F, As, bolt.E, bolt.nu, lens.LE),
+      MMC: flankFit(surface, 'MMC', 'MMC', F, As, bolt.E, bolt.nu, lens.LE),
+      LMC: flankFit(surface, 'LMC', 'LMC', F, As, bolt.E, bolt.nu, lens.LE),
     },
   };
 }
@@ -429,7 +434,8 @@ export function computeStrength(
  * Smallest diametral nut oversize that removes flank interference for the
  * MMC bolt in the MMC nut (worst case) at load F: the back-flank gap grows by
  * Δ·tan 30°, so Δ = max(0, ε·LE − a − p)·cot 30°. Rounded up to 0.001 in.
- * `fit` must be the standard (not oversized) fit.
+ * `fit` must be the standard (not oversized) fit — after coating if the threads
+ * are coated, since the oversize is cut before coating and simply adds Δ.
  */
 export function requiredOversize(
   fit: ThreadFit,

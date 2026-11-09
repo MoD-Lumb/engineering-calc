@@ -4,7 +4,7 @@ import { useMemo, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, Wand2 } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { rowsToTSV } from '@/lib/format';
-import { applyNutOversize, fmtIn, type ThreadFit } from './b11';
+import { applyCoating, applyNutOversize, fmtIn, type CoatingSpec, type ThreadFit } from './b11';
 import {
   computeStrength,
   maxOversize,
@@ -34,6 +34,8 @@ interface Props {
   os: OversizeState;
   setOs: (fn: (prev: OversizeState) => OversizeState) => void;
   sys: Sys;
+  /** Thread coating: flank play / interference rows use the coated surfaces */
+  coat: CoatingSpec;
 }
 
 interface Row {
@@ -60,17 +62,19 @@ const interferenceBadge = (gap: number) => (
  * the working load, maximum oversize keeping "bolt breaks first", and a
  * before / after comparison with the standard 2B nut.
  */
-export function OversizePanel({ fitBase, lens, F, bolt, nut, os, setOs, sys }: Props) {
+export function OversizePanel({ fitBase, lens, F, bolt, nut, os, setOs, sys, coat }: Props) {
   const delta = Number.isFinite(os.delta) ? Math.min(Math.max(os.delta, 0), MAX_OVERSIZE_INPUT) : 0;
 
   const { std, ovs, req, max, fitOs } = useMemo(() => {
-    const std = computeStrength(fitBase, lens, F, bolt, nut);
+    // strength on base metal, flank fit on the coated surfaces (oversize is cut before coating)
+    const surfStd = applyCoating(fitBase, coat);
+    const std = computeStrength(fitBase, lens, F, bolt, nut, surfStd);
     const fitOs = applyNutOversize(fitBase, delta);
-    const ovs = computeStrength(fitOs, lens, F, bolt, nut);
-    const req = requiredOversize(fitBase, F, std.As, bolt.E, bolt.nu, lens.LE);
+    const ovs = computeStrength(fitOs, lens, F, bolt, nut, applyCoating(fitOs, coat));
+    const req = requiredOversize(surfStd, F, std.As, bolt.E, bolt.nu, lens.LE);
     const max = maxOversize(fitBase, lens, F, bolt, nut);
     return { std, ovs, req, max, fitOs };
-  }, [fitBase, lens, F, bolt, nut, delta]);
+  }, [fitBase, lens, F, bolt, nut, delta, coat]);
 
   const engPct = (e: number) => `${((e / fitBase.basicEngagement) * 100).toFixed(0)} % of basic`;
   const gov = (r: typeof std) => Math.max(r.strip.LMC.utilBolt, r.strip.LMC.utilNut);
@@ -227,7 +231,8 @@ export function OversizePanel({ fitBase, lens, F, bolt, nut, os, setOs, sys }: P
 
         <div className="text-xs leading-relaxed text-slate-600 dark:text-slate-300 space-y-1">
           <div>
-            Minimum to remove interference (MMC bolt in MMC nut at the working load):{' '}
+            Minimum to remove interference (MMC bolt in MMC nut at the working load
+            {coat.on ? ', coated surfaces' : ''}):{' '}
             <span className="font-mono">
               Δ<sub>req</sub> = 1.732 · {fmtIn(Math.max(0, -std.fit.MMC.gapEnd), 5)} = {fmtIn(req.exact, 5)} in
             </span>{' '}

@@ -4,7 +4,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import type { ThreadFit } from './b11';
+import { coatingActive, type CoatingSpec, type ThreadFit } from './b11';
 import {
   CONDS,
   basicProfile,
@@ -13,6 +13,7 @@ import {
   boltSection,
   buildBolt,
   buildNut,
+  coatedDims,
   computeLayout,
   nutEnvelope,
   nutProfile,
@@ -43,6 +44,8 @@ export interface ThreadViewerProps {
   grip: number;
   /** Working load: displacement field of the bolt (drawing units) and whether it is applied */
   load: { applied: boolean; params: StretchParams };
+  /** Thread coating (limits of `fit` apply before coating) */
+  coat: CoatingSpec;
   className?: string;
 }
 
@@ -50,8 +53,13 @@ interface Model {
   fit: ThreadFit;
   k: number;
   lay: Layout;
+  /** Base-metal profiles */
   boltProfiles: Record<Cond, ProfileSample[]>;
   nutProfiles: Record<Cond, ProfileSample[]>;
+  /** Coated (surface) profiles — identical to the base ones without coating */
+  boltSurf: Record<Cond, ProfileSample[]>;
+  nutSurf: Record<Cond, ProfileSample[]>;
+  coated: boolean;
   basic: ProfileSample[];
   bolt: PartGeometry;
   nut: PartGeometry;
@@ -355,6 +363,15 @@ class ThreadScene {
       MMC: this.capMaterial(PALETTE.nutMMC.fill, 2),
       LMC: this.capMaterial(PALETTE.nutLMC.fill, 3),
     } as Record<Cond, THREE.MeshBasicMaterial>,
+    // coating layer: drawn just below the base-metal cap of the same condition
+    boltCoat: {
+      MMC: this.capMaterial(PALETTE.coating.light, 1.6),
+      LMC: this.capMaterial(PALETTE.coating.light, 2.6),
+    } as Record<Cond, THREE.MeshBasicMaterial>,
+    nutCoat: {
+      MMC: this.capMaterial(PALETTE.coating.light, 1.6),
+      LMC: this.capMaterial(PALETTE.coating.light, 2.6),
+    } as Record<Cond, THREE.MeshBasicMaterial>,
     clearance: this.capMaterial(PALETTE.clearance, 1),
     interference: this.capMaterial(PALETTE.interference, 5),
     marker: new THREE.PointsMaterial({
@@ -418,6 +435,7 @@ class ThreadScene {
       this.mats.boltSteel,
       ...Object.values(this.mats.boltThread),
       ...Object.values(this.mats.boltCap),
+      ...Object.values(this.mats.boltCoat),
       ...Object.values(this.mats.boltLine),
     ])
       addStretch(mat, this.stretchU);
@@ -522,23 +540,35 @@ class ThreadScene {
 
   /* -------------------------------------------------------------- model */
 
-  setModel(fit: ThreadFit, k: number, grip: number) {
+  setModel(fit: ThreadFit, k: number, grip: number, coat: CoatingSpec) {
     const prev = this.model;
     const dims = visualDims(fit, k);
     const lay = computeLayout(fit, dims, grip);
-    const boltProfiles = {
-      MMC: boltProfile(dims.bolt.MMC, fit.P),
-      LMC: boltProfile(dims.bolt.LMC, fit.P),
-    };
-    const nutProfiles = {
-      MMC: nutProfile(dims.nut.MMC, fit.P),
-      LMC: nutProfile(dims.nut.LMC, fit.P),
-    };
-    const bolt = buildBolt(lay, boltProfiles);
-    const nut = buildNut(lay, nutProfiles);
+    const profiles = (d: typeof dims) => ({
+      bolt: { MMC: boltProfile(d.bolt.MMC, fit.P), LMC: boltProfile(d.bolt.LMC, fit.P) },
+      nut: { MMC: nutProfile(d.nut.MMC, fit.P), LMC: nutProfile(d.nut.LMC, fit.P) },
+    });
+    const base = profiles(dims);
+    const coated = coatingActive(coat);
+    const surf = coated ? profiles(coatedDims(dims, coat, k)) : base;
+    // the visible thread surfaces are the coated ones
+    const bolt = buildBolt(lay, surf.bolt);
+    const nut = buildNut(lay, surf.nut);
 
     this.disposeModel();
-    this.model = { fit, k, lay, boltProfiles, nutProfiles, basic: basicProfile(fit), bolt, nut };
+    this.model = {
+      fit,
+      k,
+      lay,
+      boltProfiles: base.bolt,
+      nutProfiles: base.nut,
+      boltSurf: surf.bolt,
+      nutSurf: surf.nut,
+      coated,
+      basic: basicProfile(fit),
+      bolt,
+      nut,
+    };
 
     const mk = (g: THREE.BufferGeometry, m: THREE.Material) => new THREE.Mesh(g, m);
     this.meshes = {
@@ -669,6 +699,8 @@ class ThreadScene {
 
     this.scene.background = new THREE.Color(dark ? '#0f1318' : '#f4f6f9');
     this.mats.boltHatch.color.set(dark ? '#7c8796' : '#d5dbe3');
+    for (const mm of [...Object.values(this.mats.boltCoat), ...Object.values(this.mats.nutCoat)])
+      mm.color.set(dark ? PALETTE.coating.dark : PALETTE.coating.light);
     this.mats.nutHatch.color.set(dark ? '#6b7584' : '#c4ccd6');
     this.mats.basic.color.set(dark ? PALETTE.basic.dark : PALETTE.basic.light);
     this.mats.axis.color.set(dark ? '#94a3b8' : '#64748b');
@@ -689,7 +721,8 @@ class ThreadScene {
       this.boltShown() &&
       this.nutShown();
     this.clrGroup.visible = fillsOk;
-    this.intGroup.visible = fillsOk && this.loadApplied;
+    // interference can exist without load when coatings eat the clearance
+    this.intGroup.visible = fillsOk;
     this.needsRender = true;
   }
 
@@ -770,18 +803,23 @@ class ThreadScene {
 
     for (const th of thetas) {
       const bs = boltSection(lay, m.boltProfiles, th);
+      const bsC = m.coated ? boltSection(lay, m.boltSurf, th) : bs;
       this.addCap(this.boltCaps, bs.common, th, this.mats.boltHatch);
       for (const c of CONDS) {
         if (!boltOn[c]) continue;
+        // coated region first (its own layer below the base cap): the visible band is the coating
+        if (m.coated) this.addCap(this.boltCaps, bsC.cond[c], th, this.mats.boltCoat[c]);
         this.addCap(this.boltCaps, bs.cond[c], th, this.mats.boltCap[c]);
-        this.addLine('bolt', bs.outline[c], th, this.mats.boltLine[c]);
+        this.addLine('bolt', bsC.outline[c], th, this.mats.boltLine[c]);
       }
       const ns = nutSection(lay, m.nutProfiles, th);
+      const nsC = m.coated ? nutSection(lay, m.nutSurf, th) : ns;
       this.addCap(this.nutCaps, ns.common, th, this.mats.nutHatch);
       for (const c of CONDS) {
         if (!nutOn[c]) continue;
+        if (m.coated) this.addCap(this.nutCaps, nsC.cond[c], th, this.mats.nutCoat[c]);
         this.addCap(this.nutCaps, ns.cond[c], th, this.mats.nutCap[c]);
-        this.addLine('nut', ns.outline[c], th, this.mats.nutLine[c]);
+        this.addLine('nut', nsC.outline[c], th, this.mats.nutLine[c]);
       }
       if (vis.basic) {
         const bb = threadPolyline(m.basic, P, lay.xTs + 2 * P, lay.L - P, th, ident);
@@ -818,16 +856,17 @@ class ThreadScene {
     const sp = this.stretch;
     const thetas = section === 'half' ? [0, Math.PI] : [0, Math.PI / 2];
     for (const th of thetas) {
-      const raw = threadPolyline(m.boltProfiles[bc], P, lay.nutA - P, lay.nutB + P, th, boltEnvelope(lay));
+      // clearance / interference between the coated surfaces
+      const raw = threadPolyline(m.boltSurf[bc], P, lay.nutA - P, lay.nutB + P, th, boltEnvelope(lay));
       const bolt: Pt[] = loaded
         ? raw.map(([x, r]) => [x + stretchDx(sp, x), r * stretchR(sp, x)] as Pt)
         : raw;
-      const nut = threadPolyline(m.nutProfiles[nc], P, lay.nutA, lay.nutB, th, nutEnvelope(lay));
+      const nut = threadPolyline(m.nutSurf[nc], P, lay.nutA, lay.nutB, th, nutEnvelope(lay));
       if (vis.clearance) {
         this.addCap(this.clrGroup, regionBetween(bolt, nut, lay.nutA, lay.nutB), th, this.mats.clearance);
       }
-      if (loaded) {
-        const ints = regionBetween(nut, bolt, lay.nutA, lay.nutB);
+      {
+        const ints = regionBetween(nut, bolt, lay.nutA, lay.nutB, 1e-7);
         this.addCap(this.intGroup, ints, th, this.mats.interference);
         // ring markers: one per overlapping flank, at the deepest point
         const marks: Pt[] = ints.map((poly) => {
@@ -968,6 +1007,7 @@ export default function ThreadViewer({
   view,
   grip,
   load,
+  coat,
   className,
 }: ThreadViewerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -989,9 +1029,9 @@ export default function ThreadViewer({
 
   useEffect(() => {
     // rebuild geometry shortly after the last change (slider drags)
-    const id = window.setTimeout(() => sceneRef.current?.setModel(fit, k, grip), 60);
+    const id = window.setTimeout(() => sceneRef.current?.setModel(fit, k, grip, coat), 60);
     return () => window.clearTimeout(id);
-  }, [fit, k, grip]);
+  }, [fit, k, grip, coat]);
 
   useEffect(() => {
     sceneRef.current?.setLoad(load.applied, load.params);

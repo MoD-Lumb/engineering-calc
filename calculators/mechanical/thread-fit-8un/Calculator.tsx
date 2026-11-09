@@ -3,7 +3,17 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { AlertTriangle, Crosshair, Maximize2, Move3d, RectangleHorizontal } from 'lucide-react';
-import { SIZES_8UN, applyNutOversize, computeFit, fmtIn } from './b11';
+import {
+  DEFAULT_COATING,
+  SIZES_8UN,
+  applyCoating,
+  applyNutOversize,
+  coatingActive,
+  computeFit,
+  fmtIn,
+  type CoatingSpec,
+} from './b11';
+import { CoatingPanel, MAX_COAT_UM } from './CoatingPanel';
 import { visualDims, type Cond } from './geometry';
 import { ProfileDetail } from './ProfileDetail';
 import { ToleranceTables } from './ToleranceTables';
@@ -170,6 +180,7 @@ export default function ThreadFitCalculator() {
   const [view, setView] = useState<{ kind: ViewKind; n: number }>({ kind: 'iso', n: 0 });
   const [lc, setLc] = useState<LoadCase>(DEFAULT_LOAD_CASE);
   const [os, setOs] = useState<OversizeState>(DEFAULT_OVERSIZE);
+  const [coat, setCoat] = useState<CoatingSpec>(DEFAULT_COATING);
   const [hydrated, setHydrated] = useState(false);
   const dark = useDarkMode();
 
@@ -182,11 +193,24 @@ export default function ThreadFitCalculator() {
           k?: number;
           lc?: Partial<LoadCase>;
           os?: Partial<OversizeState>;
+          coat?: Partial<CoatingSpec>;
         };
         if (saved.D && SIZES_8UN.some((s) => s.D === saved.D)) setSizeD(saved.D);
         if (saved.k && saved.k >= 1 && saved.k <= 5) setK(saved.k);
         if (saved.lc && typeof saved.lc === 'object') {
           setLc({ ...DEFAULT_LOAD_CASE, ...saved.lc, applied: false });
+        }
+        if (saved.coat && typeof saved.coat === 'object') {
+          const num = (v: unknown, d: number) => {
+            const n = Number(v);
+            return Number.isFinite(n) ? Math.min(Math.max(n, 0), MAX_COAT_UM) : d;
+          };
+          const sc = saved.coat;
+          setCoat({
+            on: !!sc.on,
+            bolt: { min: num(sc.bolt?.min, DEFAULT_COATING.bolt.min), max: num(sc.bolt?.max, DEFAULT_COATING.bolt.max) },
+            nut: { min: num(sc.nut?.min, DEFAULT_COATING.nut.min), max: num(sc.nut?.max, DEFAULT_COATING.nut.max) },
+          });
         }
         if (saved.os && typeof saved.os === 'object') {
           const d = Number(saved.os.delta);
@@ -207,18 +231,21 @@ export default function ThreadFitCalculator() {
     try {
       window.localStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ D: sizeD, k, lc: { ...lc, applied: false }, os })
+        JSON.stringify({ D: sizeD, k, lc: { ...lc, applied: false }, os, coat })
       );
     } catch {
       // ignore
     }
-  }, [sizeD, k, lc, os, hydrated]);
+  }, [sizeD, k, lc, os, coat, hydrated]);
 
   const size = SIZES_8UN.find((s) => s.D === sizeD) ?? SIZES_8UN[1];
   const fitBase = useMemo(() => computeFit(size), [size]);
   // nut oversize (whole thread form) — everything below uses the possibly oversized fit
   const osDelta = os.on && Number.isFinite(os.delta) ? Math.min(Math.max(os.delta, 0), MAX_OVERSIZE_INPUT) : 0;
   const fit = useMemo(() => (osDelta > 0 ? applyNutOversize(fitBase, osDelta) : fitBase), [fitBase, osDelta]);
+  // coated surfaces (limits after coating) — used for fit / interference; `fit` stays base metal for strength
+  const surf = useMemo(() => applyCoating(fit, coat), [fit, coat]);
+  const coated = coatingActive(coat);
 
   // radial engagement as drawn at LMC/LMC — warns when exaggeration makes threads disengage
   const drawnEngagement = useMemo(() => {
@@ -243,15 +270,15 @@ export default function ThreadFitCalculator() {
   const Flbf = Math.max(0, forceLbf(lc) || 0);
   const res = useMemo(
     () =>
-      computeStrength(fit, lens, Flbf, boltMat, nutMat),
-    [fit, lens, Flbf, boltMat, nutMat]
+      computeStrength(fit, lens, Flbf, boltMat, nutMat, surf),
+    [fit, lens, Flbf, boltMat, nutMat, surf]
   );
   // the 3D / 2D pictures use the outermost visible bolt and innermost visible nut
   const pairBolt: Cond = vis.boltMMC || !vis.boltLMC ? 'MMC' : 'LMC';
   const pairNut: Cond = vis.nutMMC || !vis.nutLMC ? 'MMC' : 'LMC';
   const pairFit = useMemo(
-    () => flankFit(fit, pairBolt, pairNut, Flbf, res.As, boltMat.E, boltMat.nu, lens.LE),
-    [fit, pairBolt, pairNut, Flbf, res.As, boltMat.E, boltMat.nu, lens.LE]
+    () => flankFit(surf, pairBolt, pairNut, Flbf, res.As, boltMat.E, boltMat.nu, lens.LE),
+    [surf, pairBolt, pairNut, Flbf, res.As, boltMat.E, boltMat.nu, lens.LE]
   );
   const sp = useMemo(
     () => stretchParams(lens, fit.P, res, pairFit, boltMat.nu, k, lc.M),
@@ -334,7 +361,10 @@ export default function ThreadFitCalculator() {
         pair={{ bolt: pairBolt, nut: pairNut, gapEnd: pairFit.gapEnd }}
       />
 
+      <CoatingPanel fit={fit} surf={surf} coat={coat} setCoat={setCoat} dark={dark} />
+
       <OversizePanel
+        coat={coat}
         fitBase={fitBase}
         lens={lens}
         F={Flbf}
@@ -396,6 +426,7 @@ export default function ThreadFitCalculator() {
             view={view}
             grip={grip}
             load={load}
+            coat={coat}
             className="absolute inset-0"
           />
           <div className="pointer-events-none absolute left-3 top-2 text-[11px] leading-snug text-slate-600 dark:text-slate-300 font-mono">
@@ -454,6 +485,21 @@ export default function ThreadFitCalculator() {
               sub="B1.1 basic form"
               dashed
             />
+            {coated && (
+              <span className="flex items-center gap-2 rounded-md border border-slate-200 dark:border-slate-800 px-2.5 py-1.5 text-xs">
+                <span
+                  aria-hidden
+                  className="h-3.5 w-3.5 rounded-sm ring-1 ring-black/15"
+                  style={{ background: dark ? PALETTE.coating.dark : PALETTE.coating.light }}
+                />
+                <span className="leading-tight">
+                  <span className="font-medium">Coating</span>
+                  <span className="block text-[10px] text-slate-500 dark:text-slate-400">
+                    bolt {coat.bolt.min}–{coat.bolt.max} µm · nut {coat.nut.min}–{coat.nut.max} µm
+                  </span>
+                </span>
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-1.5 text-xs">
             <span className="text-slate-500 dark:text-slate-400 mr-1">Quick:</span>
@@ -508,7 +554,7 @@ export default function ThreadFitCalculator() {
           </h3>
         </header>
         <div className="p-3">
-          <ProfileDetail fit={fit} k={k} vis={vis} loaded={loaded2D} />
+          <ProfileDetail fit={fit} k={k} vis={vis} loaded={loaded2D} coat={coat} />
         </div>
       </section>
 
@@ -535,7 +581,7 @@ export default function ThreadFitCalculator() {
 
       <StrengthResults fit={fit} res={res} lens={lens} lc={lc} />
 
-      <ToleranceTables fit={fit} />
+      <ToleranceTables fit={fit} surf={coated ? surf : undefined} />
     </div>
   );
 }

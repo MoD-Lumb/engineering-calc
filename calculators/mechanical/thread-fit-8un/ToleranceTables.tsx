@@ -47,8 +47,14 @@ interface LimitRow {
   dp?: number;
 }
 
-export function ToleranceTables({ fit }: { fit: ThreadFit }) {
-  const { ext, int, clearance: c } = fit;
+/**
+ * `fit` = base-metal limits (ASME B1.1, before coating). `surf` = limits after
+ * coating, when the threads are coated: clearances are evaluated on it.
+ */
+export function ToleranceTables({ fit, surf }: { fit: ThreadFit; surf?: ThreadFit }) {
+  const { ext, int } = fit;
+  const c = (surf ?? fit).clearance;
+  const coat = surf?.coating;
 
   const boltRows: LimitRow[] = [
     { feature: 'Major diameter', symbol: 'd', mmc: ext.majorMax, lmc: ext.majorMin, tol: ext.majorTol, mmcIsMax: true },
@@ -100,14 +106,41 @@ export function ToleranceTables({ fit }: { fit: ThreadFit }) {
       fmtMm(r.mmc),
       fmtMm(r.lmc),
     ]),
+    ...coatedRows().map((r) => [
+      'After coating',
+      r.feature,
+      r.symbol,
+      fmtIn(r.mmc, 5),
+      fmtIn(r.lmc, 5),
+      fmtIn(r.tol ?? 0, 5),
+      fmtMm(r.mmc, 4),
+      fmtMm(r.lmc, 4),
+    ]),
   ]);
+
+  function coatedRows(): LimitRow[] {
+    if (!surf) return [];
+    const e = surf.ext;
+    const i = surf.int;
+    return [
+      { feature: 'Bolt major diameter', symbol: 'd′', mmc: e.majorMax, lmc: e.majorMin, tol: e.majorMax - e.majorMin, mmcIsMax: true, dp: 5 },
+      { feature: 'Bolt pitch diameter', symbol: 'd₂′', mmc: e.pitchMax, lmc: e.pitchMin, tol: e.pitchMax - e.pitchMin, mmcIsMax: true, dp: 5 },
+      { feature: 'Nut minor diameter', symbol: 'D₁′', mmc: i.minorMin, lmc: i.minorMax, tol: i.minorMax - i.minorMin, mmcIsMax: false, dp: 5 },
+      { feature: 'Nut pitch diameter', symbol: 'D₂′', mmc: i.pitchMin, lmc: i.pitchMax, tol: i.pitchMax - i.pitchMin, mmcIsMax: false, dp: 5 },
+    ];
+  }
 
   const clrRows: Array<{ feature: string; formula: string; mmc: number; lmc: number; note?: string }> = [
     { feature: 'Pitch diameter clearance', formula: 'D₂ − d₂', mmc: c.pitch.min, lmc: c.pitch.max },
     { feature: 'Major diameter clearance', formula: 'D − d', mmc: c.major.min, lmc: c.major.max, note: '†' },
     { feature: 'Minor diameter clearance', formula: 'D₁ − d₃', mmc: c.minor.min, lmc: c.minor.max, note: '†' },
     { feature: 'Axial play (flanks centred)', formula: '(D₂ − d₂)·tan 30°', mmc: c.axialPlay.min, lmc: c.axialPlay.max },
-    { feature: 'Radial thread engagement', formula: '(d − D₁)/2', mmc: c.engagement.max, lmc: c.engagement.min },
+    {
+      feature: surf ? 'Radial thread engagement (base metal)' : 'Radial thread engagement',
+      formula: '(d − D₁)/2',
+      mmc: fit.clearance.engagement.max,
+      lmc: fit.clearance.engagement.min,
+    },
   ];
   const clrTsv = rowsToTSV([
     ['Feature', 'Formula', 'MMC/MMC [in]', 'LMC/LMC [in]', 'MMC/MMC [mm]', 'LMC/LMC [mm]'],
@@ -209,11 +242,33 @@ export function ToleranceTables({ fit }: { fit: ThreadFit }) {
               </td>
             </tr>
             <LimitBody rows={nutRows} mmcColor={PALETTE.nutMMC.fill} lmcColor={PALETTE.nutLMC.fill} />
+            {surf && coat && (
+              <>
+                <tr className={groupCls}>
+                  <td colSpan={7} className="px-3 py-1.5 text-xs font-semibold">
+                    After coating — surface limits
+                    <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">
+                      bolt {coat.bolt.min}–{coat.bolt.max} µm, nut {coat.nut.min}–{coat.nut.max} µm · pitch Ø ±4t, major /
+                      minor ±2t · MMC with max thickness, LMC with min
+                    </span>
+                  </td>
+                </tr>
+                <LimitBody rows={coatedRows().slice(0, 2)} mmcColor={PALETTE.boltMMC.fill} lmcColor={PALETTE.boltLMC.fill} />
+                <LimitBody rows={coatedRows().slice(2)} mmcColor={PALETTE.nutMMC.fill} lmcColor={PALETTE.nutLMC.fill} />
+              </>
+            )}
           </tbody>
         </table>
       </Card>
 
-      <Card title="Clearance between bolt and nut (diametral unless noted)" copy={clrTsv}>
+      <Card
+        title={
+          surf
+            ? 'Clearance between bolt and nut — after coating (diametral unless noted)'
+            : 'Clearance between bolt and nut (diametral unless noted)'
+        }
+        copy={clrTsv}
+      >
         <table className="w-full text-sm">
           <thead className={theadCls}>
             <tr>
@@ -242,8 +297,9 @@ export function ToleranceTables({ fit }: { fit: ThreadFit }) {
           </tbody>
         </table>
         <p className="px-4 py-2 text-xs text-slate-500 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800/60">
-          MMC/MMC = tightest fit (largest bolt in smallest nut, minimum clearance = allowance es). LMC/LMC =
-          loosest fit (maximum clearance). Thread engagement is the opposite: largest at MMC/MMC, smallest at
+          MMC/MMC = tightest fit (largest bolt in smallest nut; minimum pitch clearance = es
+          {fit.nutOversize > 0 ? ' + oversize Δ' : ''}
+          {surf ? ' − 4·(t_b,max + t_n,max) for the coating' : ''}). LMC/LMC = loosest fit (maximum clearance). Thread engagement is the opposite: largest at MMC/MMC, smallest at
           LMC/LMC (basic 5H/8 = {fmtIn(fit.basicEngagement)} in).
         </p>
       </Card>
