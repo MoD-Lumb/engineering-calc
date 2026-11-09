@@ -439,6 +439,7 @@ Some calculators need more than the YAML grid. They use the custom `.tsx` patter
 |---|---|
 | `b11.ts` | ASME B1.1 formulas → limits of size (2A/2B), MMC/LMC, clearances. Pure TS, no UI. |
 | `strength.ts` | Working load: material presets (A193 B7/B16/B8 Cl.2, A320 L7, SAE J429 Gr 5/8 + nut grades), B1.1 tensile stress area, bolt yield, B1.1 / FED-STD-H28 thread stripping, elongation (nut fixed), full-load-stretch flank interference, and the bolt displacement field shared with the 3D shader. Pure TS. |
+| `OversizePanel.tsx` | Nut oversize (whole thread form, `applyNutOversize` in `b11.ts`): minimum oversize removing flank interference at the working load, maximum keeping bolt-breaks-first, before/after comparison. |
 | `StrengthPanel.tsx`, `FlankGapChart.tsx` | Load case inputs (materials, load kN/lbf, grip length, apply load) and results table; SVG chart of flank gaps along the engagement. |
 | `geometry.ts` | Thread profiles, helical thread meshes, hex bodies, analytic section polygons (Three.js geometry only). |
 | `ThreadViewer.tsx` | Three.js scene: assembled / exploded / isolated, half & quarter sections with hatched caps, MMC/LMC visibility, clearance fill; bolt stretch under load in the vertex shader (shared uniforms), interference fill + markers. |

@@ -64,7 +64,7 @@ export function ToleranceTables({ fit }: { fit: ThreadFit }) {
     },
   ];
   const nutRows: LimitRow[] = [
-    { feature: 'Minor diameter', symbol: 'D₁', mmc: int.minorMin, lmc: int.minorMax, tol: int.minorTol, mmcIsMax: false, dp: 3 },
+    { feature: 'Minor diameter', symbol: 'D₁', mmc: int.minorMin, lmc: int.minorMax, tol: int.minorTol, mmcIsMax: false, dp: fit.nutOversize ? 4 : 3 },
     { feature: 'Pitch diameter', symbol: 'D₂', mmc: int.pitchMin, lmc: int.pitchMax, tol: int.pitchTol, mmcIsMax: false },
     {
       feature: 'Major diameter',
@@ -197,6 +197,12 @@ export function ToleranceTables({ fit }: { fit: ThreadFit }) {
             <tr className={groupCls}>
               <td colSpan={7} className="px-3 py-1.5 text-xs font-semibold">
                 Nut — internal thread {fit.designationInt}
+                {fit.nutOversize > 0 && (
+                  <span className="ml-2 font-normal text-fuchsia-700 dark:text-fuchsia-300">
+                    oversize +{fmtIn(fit.nutOversize)} in applied to minor, pitch and major diameters (not 2B
+                    gauge-conforming)
+                  </span>
+                )}
                 <span className="ml-2 font-normal text-slate-500 dark:text-slate-400">
                   no allowance · MMC = minimum size
                 </span>
