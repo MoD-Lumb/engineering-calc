@@ -9,13 +9,16 @@ import {
   CONDS,
   basicProfile,
   boltProfile,
+  boltEnvelope,
   boltSection,
   buildBolt,
   buildNut,
-  clearancePolygon,
   computeLayout,
+  nutEnvelope,
   nutProfile,
   nutSection,
+  interpPolyline as interp,
+  regionBetween,
   threadPolyline,
   visualDims,
   type Cond,
@@ -24,6 +27,7 @@ import {
   type ProfileSample,
   type Pt,
 } from './geometry';
+import { NO_STRETCH, stretchDx, stretchR, type StretchParams } from './strength';
 import { PALETTE, type Config, type Section, type ViewKind, type Visibility } from './viewTypes';
 
 export interface ThreadViewerProps {
@@ -35,6 +39,10 @@ export interface ThreadViewerProps {
   vis: Visibility;
   dark: boolean;
   view: { kind: ViewKind; n: number };
+  /** Grip length [in] (head bearing face to nut face) */
+  grip: number;
+  /** Working load: displacement field of the bolt (drawing units) and whether it is applied */
+  load: { applied: boolean; params: StretchParams };
   className?: string;
 }
 
@@ -102,6 +110,26 @@ function densify(poly: Pt[], maxLen: number): Pt[] {
   return out;
 }
 
+/** Ring sprite used to flag interference locations (they can be a pixel thin). */
+function ringTexture(color: string): THREE.CanvasTexture {
+  const n = 64;
+  const cv = document.createElement('canvas');
+  cv.width = n;
+  cv.height = n;
+  const g = cv.getContext('2d')!;
+  g.strokeStyle = '#ffffff';
+  g.lineWidth = 10;
+  g.beginPath();
+  g.arc(n / 2, n / 2, n / 2 - 9, 0, Math.PI * 2);
+  g.stroke();
+  g.strokeStyle = color;
+  g.lineWidth = 6;
+  g.stroke();
+  const t = new THREE.CanvasTexture(cv);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 function disposeGroup(g: THREE.Object3D) {
   for (const child of [...g.children]) {
     disposeGroup(child);
@@ -116,6 +144,89 @@ function toWorld(pts: Pt[], theta: number): THREE.Vector3[] {
   const c = Math.round(Math.cos(theta) * 1e9) / 1e9;
   const s = Math.round(Math.sin(theta) * 1e9) / 1e9;
   return pts.map(([x, r]) => new THREE.Vector3(x, r * c, r * s));
+}
+
+/**
+ * Axial stretch of the bolt, applied in the vertex shader of every bolt
+ * material (surfaces, section caps, outlines). Mirrors stretchDx / stretchR
+ * in strength.ts — keep the two in sync.
+ */
+const STRETCH_GLSL = `
+uniform float uLoad;
+uniform float uXTs;
+uniform float uEA;
+uniform float uEB;
+uniform float uP;
+uniform float uDA;
+uniform float uStrainB;
+uniform float uStrainT;
+uniform float uStrainE;
+uniform float uRadB;
+uniform float uRadT;
+float ecDx(float x) {
+  if (x >= uEB) return uDA + uStrainE * (uEB - uEA);
+  if (x >= uEA) return uDA + uStrainE * (x - uEA);
+  if (x >= uXTs) return uDA - uStrainT * (uEA - x);
+  float dTs = uDA - uStrainT * (uEA - uXTs);
+  if (x >= 0.0) return dTs - uStrainB * (uXTs - x);
+  return dTs - uStrainB * uXTs;
+}
+float ecR(float x) {
+  if (x < 0.0) return 1.0;
+  if (x < uXTs) return 1.0 - uRadB;
+  if (x <= uEB) return 1.0 - uRadT;
+  float t = clamp((x - uEB) / uP, 0.0, 1.0);
+  return 1.0 - uRadT * (1.0 - t);
+}
+`;
+
+type StretchUniforms = Record<string, { value: number }>;
+
+function makeStretchUniforms(): StretchUniforms {
+  const u: StretchUniforms = { uLoad: { value: 0 } };
+  for (const key of ['uXTs', 'uEA', 'uEB', 'uDA', 'uStrainB', 'uStrainT', 'uStrainE', 'uRadB', 'uRadT'])
+    u[key] = { value: 0 };
+  u.uP = { value: 1 };
+  return u;
+}
+
+function setStretchUniforms(u: StretchUniforms, sp: StretchParams) {
+  u.uXTs.value = sp.xTs;
+  u.uEA.value = sp.eA;
+  u.uEB.value = sp.eB;
+  u.uP.value = sp.P;
+  u.uDA.value = sp.dA;
+  u.uStrainB.value = sp.strainB;
+  u.uStrainT.value = sp.strainT;
+  u.uStrainE.value = sp.strainE;
+  u.uRadB.value = sp.radB;
+  u.uRadT.value = sp.radT;
+}
+
+function addStretch(mat: THREE.Material, uniforms: StretchUniforms, worldUv = false) {
+  mat.onBeforeCompile = (shader: { uniforms: Record<string, THREE.IUniform>; vertexShader: string }) => {
+    Object.assign(shader.uniforms, uniforms);
+    shader.vertexShader = shader.vertexShader
+      .replace('#include <common>', `#include <common>\n${STRETCH_GLSL}`)
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        {
+          float ecx = transformed.x;
+          transformed.x += uLoad * ecDx(ecx);
+          transformed.yz *= mix(1.0, ecR(ecx), uLoad);
+        }${
+          worldUv
+            ? `
+        #ifdef USE_MAP
+          // hatch in section-plane coordinates of the displaced point, so it stays straight
+          vMapUv = ( mapTransform * vec3( transformed.x, transformed.y + transformed.z, 1.0 ) ).xy;
+        #endif`
+            : ''
+        }`
+      );
+  };
+  mat.customProgramCacheKey = () => (worldUv ? 'ec-bolt-stretch-uv' : 'ec-bolt-stretch');
 }
 
 class ThreadScene {
@@ -133,6 +244,7 @@ class ThreadScene {
   private readonly boltCaps = new THREE.Group();
   private readonly nutCaps = new THREE.Group();
   private readonly clrGroup = new THREE.Group();
+  private readonly intGroup = new THREE.Group();
   private readonly axisGroup = new THREE.Group();
   /** Lines lying on the plane z = 0 (θ = 0, π) and y = 0 (θ = π/2), lifted towards the viewer each frame */
   private readonly boltLinesZ = new THREE.Group();
@@ -162,6 +274,11 @@ class ThreadScene {
     dark: false,
   };
 
+  private readonly stretchU = makeStretchUniforms();
+  private stretch: StretchParams = NO_STRETCH;
+  private loadApplied = false;
+  private loadAnim: { from: number; to: number; t0: number; dur: number } | null = null;
+
   private nutOffset = 0;
   private nutAnim: { from: number; to: number; t0: number; dur: number } | null = null;
   private camAnim: {
@@ -178,6 +295,7 @@ class ThreadScene {
 
   private readonly hatchBolt = hatchTexture(false);
   private readonly hatchNut = hatchTexture(true);
+  private readonly ringTex = ringTexture(PALETTE.interference);
   private readonly envTex: THREE.Texture;
 
   readonly mats = {
@@ -238,6 +356,16 @@ class ThreadScene {
       LMC: this.capMaterial(PALETTE.nutLMC.fill, 3),
     } as Record<Cond, THREE.MeshBasicMaterial>,
     clearance: this.capMaterial(PALETTE.clearance, 1),
+    interference: this.capMaterial(PALETTE.interference, 5),
+    marker: new THREE.PointsMaterial({
+      size: 22,
+      sizeAttenuation: false,
+      map: this.ringTex,
+      transparent: true,
+      alphaTest: 0.05,
+      depthTest: false,
+      toneMapped: false,
+    }),
     boltLine: {
       MMC: new THREE.LineBasicMaterial({ color: PALETTE.boltMMC.line, toneMapped: false }),
       LMC: new THREE.LineBasicMaterial({ color: PALETTE.boltLMC.line, toneMapped: false }),
@@ -284,7 +412,16 @@ class ThreadScene {
 
     this.boltGroup.add(this.boltCaps, this.boltLinesZ, this.boltLinesY);
     this.nutGroup.add(this.nutCaps, this.nutLinesZ, this.nutLinesY);
-    this.scene.add(this.boltGroup, this.nutGroup, this.clrGroup, this.axisGroup);
+    this.scene.add(this.boltGroup, this.nutGroup, this.clrGroup, this.intGroup, this.axisGroup);
+
+    for (const mat of [
+      this.mats.boltSteel,
+      ...Object.values(this.mats.boltThread),
+      ...Object.values(this.mats.boltCap),
+      ...Object.values(this.mats.boltLine),
+    ])
+      addStretch(mat, this.stretchU);
+    addStretch(this.mats.boltHatch, this.stretchU, true);
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
@@ -333,6 +470,16 @@ class ThreadScene {
       }
       changed = true;
     }
+    if (this.loadAnim) {
+      const a = this.loadAnim;
+      const t = Math.min(1, (now - a.t0) / a.dur);
+      this.stretchU.uLoad.value = a.from + (a.to - a.from) * ease(t);
+      if (t >= 1) {
+        this.loadAnim = null;
+        this.rebuildFills();
+      }
+      changed = true;
+    }
     if (this.camAnim) {
       const a = this.camAnim;
       const t = Math.min(1, (now - a.t0) / a.dur);
@@ -375,10 +522,10 @@ class ThreadScene {
 
   /* -------------------------------------------------------------- model */
 
-  setModel(fit: ThreadFit, k: number) {
+  setModel(fit: ThreadFit, k: number, grip: number) {
     const prev = this.model;
     const dims = visualDims(fit, k);
-    const lay = computeLayout(fit, dims);
+    const lay = computeLayout(fit, dims, grip);
     const boltProfiles = {
       MMC: boltProfile(dims.bolt.MMC, fit.P),
       LMC: boltProfile(dims.bolt.LMC, fit.P),
@@ -407,6 +554,9 @@ class ThreadScene {
       },
     };
     this.boltGroup.add(...this.meshes.boltCommon, this.meshes.boltThread.MMC, this.meshes.boltThread.LMC);
+    // the vertex shader stretches the bolt beyond its bounding sphere
+    for (const mesh of [...this.meshes.boltCommon, ...Object.values(this.meshes.boltThread)])
+      mesh.frustumCulled = false;
     this.nutGroup.add(...this.meshes.nutCommon, this.meshes.nutThread.MMC, this.meshes.nutThread.LMC);
 
     const spacing = fit.D / 14;
@@ -425,7 +575,7 @@ class ThreadScene {
     this.nutGroup.position.x = this.nutOffset;
 
     this.applyState();
-    if (!prev || prev.fit.D !== fit.D) this.view('iso', !prev);
+    if (!prev || prev.fit.D !== fit.D || prev.lay.grip !== grip) this.view(prev ? 'fit' : 'iso', !prev);
     this.needsRender = true;
   }
 
@@ -461,6 +611,25 @@ class ThreadScene {
       }
       this.view('fit', false, target);
     }
+  }
+
+  /** Apply / remove the working load (animated) or update its displacement field. */
+  setLoad(applied: boolean, params: StretchParams) {
+    this.stretch = params;
+    setStretchUniforms(this.stretchU, params);
+    if (applied !== this.loadApplied) {
+      this.loadApplied = applied;
+      this.loadAnim = {
+        from: this.stretchU.uLoad.value,
+        to: applied ? 1 : 0,
+        t0: performance.now(),
+        dur: 750,
+      };
+      this.updateClearanceVisibility();
+    } else if (!this.loadAnim) {
+      this.rebuildFills();
+    }
+    this.needsRender = true;
   }
 
   private boltShown() {
@@ -510,15 +679,17 @@ class ThreadScene {
   }
 
   private updateClearanceVisibility() {
-    const { config, section, vis } = this.state;
-    this.clrGroup.visible =
-      vis.clearance &&
+    const { config, section } = this.state;
+    const fillsOk =
       section !== 'none' &&
       config === 'assembled' &&
       !this.nutAnim &&
+      !this.loadAnim &&
       Math.abs(this.nutOffset) < 1e-9 &&
       this.boltShown() &&
       this.nutShown();
+    this.clrGroup.visible = fillsOk;
+    this.intGroup.visible = fillsOk && this.loadApplied;
     this.needsRender = true;
   }
 
@@ -544,6 +715,7 @@ class ThreadScene {
       geo.computeBoundingSphere();
       const mesh = new THREE.Mesh(geo, mat);
       mesh.renderOrder = 1;
+      mesh.frustumCulled = false;
       group.add(mesh);
     }
   }
@@ -563,6 +735,7 @@ class ThreadScene {
             : this.nutLinesZ;
     const geo = new THREE.BufferGeometry().setFromPoints(toWorld(pts, theta));
     const line = new THREE.Line(geo, mat);
+    line.frustumCulled = false;
     if (dashed) line.computeLineDistances();
     line.renderOrder = 2;
     group.add(line);
@@ -573,6 +746,7 @@ class ThreadScene {
       this.boltCaps,
       this.nutCaps,
       this.clrGroup,
+      this.intGroup,
       this.axisGroup,
       this.boltLinesZ,
       this.boltLinesY,
@@ -615,19 +789,73 @@ class ThreadScene {
         const nb = threadPolyline(m.basic, P, lay.nutA + P / 2, lay.nutB - P / 2, th, ident);
         this.addLine('nut', nb, th, this.mats.basic, true);
       }
-      if (vis.clearance) {
-        const bc: Cond | null = vis.boltMMC ? 'MMC' : vis.boltLMC ? 'LMC' : null;
-        const nc: Cond | null = vis.nutMMC ? 'MMC' : vis.nutLMC ? 'LMC' : null;
-        if (bc && nc) {
-          const poly = clearancePolygon(lay, m.boltProfiles[bc], m.nutProfiles[nc], th);
-          this.addCap(this.clrGroup, [poly], th, this.mats.clearance);
-        }
-      }
     }
     // centre line (chain line) on the section plane
     const x0 = -lay.headH - 0.25 * lay.D;
     const x1 = lay.L + lay.explode + 0.25 * lay.D;
     this.addLine('axis', [[x0, 0], [x1, 0]], 0, this.mats.axis, true);
+    this.rebuildFills();
+  }
+
+  /**
+   * Clearance (nut above bolt) and interference (bolt above nut) on the
+   * section plane, from the visible bolt and nut conditions. The bolt profile
+   * is displaced with the same function as the vertex shader.
+   */
+  private rebuildFills() {
+    disposeGroup(this.clrGroup);
+    disposeGroup(this.intGroup);
+    const m = this.model;
+    if (!m) return;
+    const { section, vis } = this.state;
+    if (section === 'none') return;
+    const bc: Cond | null = vis.boltMMC ? 'MMC' : vis.boltLMC ? 'LMC' : null;
+    const nc: Cond | null = vis.nutMMC ? 'MMC' : vis.nutLMC ? 'LMC' : null;
+    if (!bc || !nc) return;
+    const { lay } = m;
+    const P = lay.P;
+    const loaded = this.loadApplied;
+    const sp = this.stretch;
+    const thetas = section === 'half' ? [0, Math.PI] : [0, Math.PI / 2];
+    for (const th of thetas) {
+      const raw = threadPolyline(m.boltProfiles[bc], P, lay.nutA - P, lay.nutB + P, th, boltEnvelope(lay));
+      const bolt: Pt[] = loaded
+        ? raw.map(([x, r]) => [x + stretchDx(sp, x), r * stretchR(sp, x)] as Pt)
+        : raw;
+      const nut = threadPolyline(m.nutProfiles[nc], P, lay.nutA, lay.nutB, th, nutEnvelope(lay));
+      if (vis.clearance) {
+        this.addCap(this.clrGroup, regionBetween(bolt, nut, lay.nutA, lay.nutB), th, this.mats.clearance);
+      }
+      if (loaded) {
+        const ints = regionBetween(nut, bolt, lay.nutA, lay.nutB);
+        this.addCap(this.intGroup, ints, th, this.mats.interference);
+        // ring markers: one per overlapping flank, at the deepest point
+        const marks: Pt[] = ints.map((poly) => {
+          const xs = poly.map((q) => q[0]);
+          const x0 = Math.min(...xs);
+          const x1 = Math.max(...xs);
+          let best = -Infinity;
+          let bx = x0;
+          for (let i = 0; i <= 24; i++) {
+            const x = x0 + ((x1 - x0) * i) / 24;
+            const d = interp(bolt, x) - interp(nut, x);
+            if (d > best) {
+              best = d;
+              bx = x;
+            }
+          }
+          return [bx, (interp(bolt, bx) + interp(nut, bx)) / 2] as Pt;
+        });
+        if (marks.length) {
+          const geo = new THREE.BufferGeometry().setFromPoints(toWorld(marks, th));
+          const pts = new THREE.Points(geo, this.mats.marker);
+          pts.renderOrder = 10;
+          pts.frustumCulled = false;
+          this.intGroup.add(pts);
+        }
+      }
+    }
+    this.updateClearanceVisibility();
   }
 
   /* -------------------------------------------------------------- camera */
@@ -639,7 +867,8 @@ class ThreadScene {
     const { lay } = m;
     const rc = lay.F / Math.sqrt(3);
     if (this.boltShown()) {
-      box.expandByPoint(new THREE.Vector3(-lay.headH, -rc, -rc));
+      const dHead = this.loadApplied ? stretchDx(this.stretch, -1) : 0;
+      box.expandByPoint(new THREE.Vector3(-lay.headH + dHead, -rc, -rc));
       box.expandByPoint(new THREE.Vector3(lay.L, rc, rc));
     }
     if (this.nutShown()) {
@@ -671,6 +900,8 @@ class ThreadScene {
       let xm = (lay.nutA + lay.nutB) / 2;
       if (this.state.config === 'exploded') xm = (lay.xTs + lay.L) / 2 + P;
       xm = Math.round(xm / P) * P;
+      // loaded: the far end of the engagement, where the back flanks close first
+      if (this.loadApplied && this.state.config === 'assembled') xm = Math.floor((lay.eB - 0.5 * P) / P) * P;
       target = new THREE.Vector3(xm, m.fit.E / 2, 0);
       dir = new THREE.Vector3(0.12, 0.1, 1).normalize();
       dist = (2.0 * P) / Math.tan(Math.min(vFov, hFov));
@@ -720,6 +951,7 @@ class ThreadScene {
     mats.forEach((mm) => mm.dispose());
     this.hatchBolt.dispose();
     this.hatchNut.dispose();
+    this.ringTex.dispose();
     this.envTex.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
@@ -734,6 +966,8 @@ export default function ThreadViewer({
   vis,
   dark,
   view,
+  grip,
+  load,
   className,
 }: ThreadViewerProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -755,9 +989,13 @@ export default function ThreadViewer({
 
   useEffect(() => {
     // rebuild geometry shortly after the last change (slider drags)
-    const id = window.setTimeout(() => sceneRef.current?.setModel(fit, k), 60);
+    const id = window.setTimeout(() => sceneRef.current?.setModel(fit, k, grip), 60);
     return () => window.clearTimeout(id);
-  }, [fit, k]);
+  }, [fit, k, grip]);
+
+  useEffect(() => {
+    sceneRef.current?.setLoad(load.applied, load.params);
+  }, [load]);
 
   useEffect(() => {
     if (view.n > 0) sceneRef.current?.view(view.kind);

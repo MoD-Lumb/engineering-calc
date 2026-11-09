@@ -66,6 +66,104 @@ With 60° flanks and the bolt centred, a diametral pitch clearance c gives a tot
 The radial depth of thread engagement is (d − D₁)/2. It is largest at MMC/MMC
 and smallest at LMC/LMC.
 
+## Working load: bolt tension and yield
+
+The yield strength S<sub>y</sub> is a **material property**. It comes from the
+bolt material specification as a minimum value that depends on the diameter.
+For example, ASTM A193 B7 is 105 ksi up to 2-1/2 in, 95 ksi up to 4 in and
+75 ksi up to 7 in.
+
+A threaded rod carries tension on the B1.1 **tensile stress area**. Tensile
+tests show a threaded rod breaks at about the same stress as a plain rod whose
+diameter is the mean of the pitch diameter and the minor diameter, D − 0.9743/n.
+B1.1 gives two forms, one for materials up to 100 ksi tensile strength and one
+for materials above it:
+
+<Formula tex="A_s = 0.7854\left(D - \dfrac{0.9743}{n}\right)^2 \quad (S_u \le 100\ \text{ksi})" />
+
+<Formula tex="A_s = \pi\left(\dfrac{E_{s,min}}{2} - \dfrac{0.16238}{n}\right)^2 \quad (S_u > 100\ \text{ksi},\ E_{s,min} = d_{2,min}\ \text{of class 2A})" />
+
+<Formula tex="\sigma = \dfrac{F}{A_s} \qquad F_y = S_y A_s \qquad F_u = S_u A_s \qquad \text{utilisation} = \dfrac{\sigma}{S_y}" />
+
+## Thread stripping
+
+A thread strips when its teeth shear off along a cylinder:
+
+- **Bolt threads** shear at the nut minor diameter D₁.
+- **Nut threads** shear at the bolt major diameter d.
+
+The shear area is the number of engaged threads (n·L<sub>E</sub>) times the
+circumference of that cylinder, times the tooth width on it. A tooth is P/2
+wide at the pitch line, and its width changes by 2·tan 30° per unit of
+diameter. That gives the B1.1 / FED-STD-H28 shear areas:
+
+<Formula tex="A_{sb} = \pi n L_E D_1\left[\dfrac{1}{2n} + 0.57735\,(d_2 - D_1)\right]" />
+
+<Formula tex="A_{sn} = \pi n L_E\, d\left[\dfrac{1}{2n} + 0.57735\,(d - D_2)\right]" />
+
+B1.1 evaluates these with least-material limits (D₁ max, d₂ min, d min, D₂ max)
+as the worst case. The calculator shows MMC/MMC and LMC/LMC. L<sub>E</sub> is
+the nut thickness minus its two 120° countersinks (≈ H<sub>nut</sub> − 0.69 P).
+The shear stress is compared with the von Mises shear yield, and the ultimate
+stripping load uses τ<sub>u</sub> ≈ 0.6 S<sub>u</sub>:
+
+<Formula tex="\tau = \dfrac{F}{A_{s}} \le 0.577\, S_y \qquad F_{strip,u} = 0.6\, S_u A_s" />
+
+For the bolt to break before the threads strip, B1.1 Appendix B requires at
+least this engagement. The nut-thread check uses the same formula, scaled by
+the bolt/nut strength ratio.
+
+<Formula tex="L_{E,req} = \dfrac{2 A_s}{\pi n K_{n,max}\left[\dfrac{1}{2n} + 0.57735\,(E_{s,min} - K_{n,max})\right]}" />
+
+Nut specifications such as ASTM A194 give hardness and proof stress, not
+yield or tensile strength. The nut values in the presets are therefore
+estimates; replace them with certified values.
+
+## Elongation with the nut fixed
+
+The nut is held, and the load pulls the bolt head away from it:
+
+- the plain shank (area A<sub>b</sub> = πD²/4, length L<sub>s</sub>) and the free
+  thread (A<sub>s</sub>, length L<sub>t</sub>) carry the full load;
+- under the **full-load stretch** assumption the engaged thread (length L<sub>E</sub>)
+  is also strained by the full load.
+
+<Formula tex="\delta = \dfrac{F}{E}\left(\dfrac{L_s}{A_b} + \dfrac{L_t}{A_s} + \dfrac{L_E}{A_s}\right)" />
+
+Bolt length and thread length follow ASME B18.2.1. The thread length is
+2D + 1/4 in for bolts up to 6 in long and 2D + 1/2 in above that.
+
+## Flank interference under load
+
+Under load the engaged part of the bolt stretches, so its pitch grows by the
+strain ε = F/(E·A<sub>s</sub>), while the fixed nut keeps its pitch.
+
+1. The bolt is pulled until the first engaged thread, at the nut bearing face,
+   bears on its loaded flank.
+2. Further along the nut, each bolt thread lags behind by ε·x. That closes the
+   back-flank gap, which starts out as the full axial play a.
+3. Poisson contraction makes the bolt thread thinner, which adds play p.
+
+<Formula tex="a = (D_2 - d_2)\tan 30^\circ \qquad p = \nu\,\varepsilon\, d_2 \tan 30^\circ" />
+
+<Formula tex="g_{back}(x) = a + p - \varepsilon x \qquad g_{loaded}(x) = \varepsilon x" />
+
+Interference exists when the back-flank gap at the last engaged thread is
+negative. It starts at the load:
+
+<Formula tex="F_{int} = \dfrac{a\, E\, A_s}{L_E - \nu\, d_2 \tan 30^\circ}" />
+
+This is the B1.1 idea that a lead deviation uses up pitch-diameter clearance:
+δ<sub>lead</sub>·cot 30° on diameter. It is a **kinematic check**. Real
+threads bend and the nut dilates, so the load concentrates on the first few
+threads instead of jamming. Interference here marks where the threads must
+deform to stay in contact; it does not mean the assembly binds.
+
+Assumptions: static load, no preload, rigid nut, uniform shear over the engaged
+threads, and steel E = 29 000 ksi (B8: 28 000 ksi) with ν = 0.3.
+VDI 2230 models the head and nut regions more realistically, with substitute
+lengths of about 0.4 d to 0.5 d.
+
 ## What the model shows
 
 - Threads are true helical 60° UN forms built from the limits above: a flat
@@ -81,6 +179,11 @@ and smallest at LMC/LMC.
 - Values marked † are not toleranced by B1.1: the bolt minor diameter at LMC
   and the nut major diameter at LMC. They are derived from the thread form so
   that the least-material solids are fully defined.
+- **Apply load in 3D** stretches the bolt in the vertex shader with the
+  displacement field above. The free length is magnified ×M so the elongation
+  is visible. The engaged thread and the flank offsets use the tolerance
+  magnification ×k, so the drawn interference (magenta) and clearance (green)
+  can be compared with the drawn tolerances. The nut does not move.
 - Hex head and nut proportions are approximate heavy-hex dimensions
   (across flats ≈ 1.5D + 1/8 in), chamfered 30°, for visualisation only.
 

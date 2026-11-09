@@ -9,9 +9,9 @@ const mod: CalcModule = {
     name: '8UN bolt & nut fit 2A/2B — 3D',
     category: 'mechanical',
     description:
-      'ASME B1.1 8-thread series: 3D bolt (2A) and nut (2B) with section, exploded and isolated views, MMC/LMC tolerance zones and clearance.',
+      'ASME B1.1 8-thread series: 3D bolt (2A) and nut (2B) with section, exploded and isolated views, MMC/LMC tolerance zones, clearance, working-load stresses, thread stripping, elongation and flank interference.',
     status: 'live',
-    tags: ['thread', 'bolt', 'nut', '8UN', 'ASME B1.1', 'tolerance', 'fastener', 'clearance', '3D'],
+    tags: ['thread', 'bolt', 'nut', '8UN', 'ASME B1.1', 'tolerance', 'fastener', 'clearance', '3D', 'stripping', 'yield', 'elongation'],
   },
   Calculator,
   Theory,
