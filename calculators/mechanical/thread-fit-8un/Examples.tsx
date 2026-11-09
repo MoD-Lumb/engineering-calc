@@ -1,5 +1,15 @@
 import { Formula } from '@/components/Formula';
-import { SIZES_8UN, applyNutOversize, computeFit, fmtIn, fmtMm, roundTo } from './b11';
+import {
+  SIZES_8UN,
+  applyCoating,
+  applyNutOversize,
+  coatingChecks,
+  computeFit,
+  fmtIn,
+  fmtMm,
+  roundTo,
+  type CoatingSpec,
+} from './b11';
 import {
   BOLT_GRADES,
   LBF_PER_KN,
@@ -43,6 +53,19 @@ export default function Examples() {
   const r3o = computeStrength(f3, lens, F3, bm, nm);
   const max3 = maxOversize(f, lens, F3, bm, nm);
   const gov = (rr: typeof r) => Math.max(rr.strip.LMC.utilBolt, rr.strip.LMC.utilNut);
+
+  // Example 4: zinc-coated bolt, unloaded and at 60 % Fy
+  const coat: CoatingSpec = { on: true, bolt: { min: 45, max: 75 }, nut: { min: 0, max: 5 } };
+  const s4 = applyCoating(f, coat);
+  const chk4 = coatingChecks(f, coat);
+  const F4 = 0.6 * r.Fy;
+  const r4u = computeStrength(f, lens, 0, bm, nm, s4);
+  const r4l = computeStrength(f, lens, F4, bm, nm, s4);
+  const req4u = requiredOversize(s4, 0, r.As, bm.E, bm.nu, lens.LE);
+  const req4l = requiredOversize(s4, F4, r.As, bm.E, bm.nu, lens.LE);
+  const f4o = applyNutOversize(f, req4l.rounded);
+  const r4o = computeStrength(f4o, lens, F4, bm, nm, applyCoating(f4o, coat));
+  const um = (inch: number) => (inch * 25400).toFixed(0);
 
   return (
     <div className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
@@ -243,6 +266,39 @@ export default function Examples() {
         In the Calculator tab press “90% F<sub>y</sub>”, choose “MMC pair”, apply the load, then press “Set to required”
         in the Nut oversize panel. The interference markers disappear and the before/after table shows the cost.
       </blockquote>
+
+      <h3 className="pt-4 text-base font-semibold text-slate-900 dark:text-slate-100">
+        Example 4 — zinc-coated bolt ({coat.bolt.min}–{coat.bolt.max} µm), nut {coat.nut.min}–{coat.nut.max} µm
+      </h3>
+      <p>
+        Limits apply before coating. At MMC the bolt pitch diameter grows by 4·{coat.bolt.max} µm = {um(4 * coat.bolt.max / 25400)} µm
+        and the nut pitch diameter shrinks by 4·{coat.nut.max} µm = {um(4 * coat.nut.max / 25400)} µm:
+      </p>
+      <Formula
+        tex={`c_{min}' = ${x(f.clearance.pitch.min)} - 4\\cdot(${coat.bolt.max} + ${coat.nut.max})\\,\\mu m = ${x(f.clearance.pitch.min)} - ${x(chk4.pdConsumed)} = ${x(s4.clearance.pitch.min)}\\ \\text{in}`}
+      />
+      <ul className="list-disc pl-5 space-y-1">
+        <li>
+          Negative: the coated MMC bolt does not enter the coated MMC nut. The back-flank gap without load is{' '}
+          {x(r4u.fit.MMC.gapEnd, 5)} in. Minimum oversize to assemble: {x(req4u.exact, 5)} → <b>{x(req4u.rounded, 3)} in</b>.
+        </li>
+        <li>
+          B1.1 2A check: 4·t<sub>b,max</sub> = {x(4 * coat.bolt.max / 25400)} in &gt; es = {x(f.ext.allowance)} in (allowance absorbs
+          at most {chk4.boltMaxInAllowance.toFixed(1)} µm), so the nut must be overtapped, as is usual for
+          galvanized bolting.
+        </li>
+        <li>
+          Under {kip(F4)} kip (60 % F<sub>y</sub>) the pitch growth adds {x(r4l.fit.MMC.growth, 5)} in. The back-flank gap
+          is {x(r4l.fit.MMC.gapEnd, 5)} in, so the required oversize rises to {x(req4l.exact, 5)} → <b>{x(req4l.rounded, 3)} in</b>.
+          With it the gap is {x(r4o.fit.MMC.gapEnd, 5)} in.
+        </li>
+        <li>
+          The coating carries no load: A<sub>s</sub>, the stripping areas and L<sub>E,req</sub> are the base-metal
+          values ({r4l.As.toFixed(4)} in², {r4l.strip.LMC.ABolt.toFixed(3)} / {r4l.strip.LMC.ANut.toFixed(3)} in²,{' '}
+          {x(r4l.LEreq)} in). With the {x(req4l.rounded, 3)} in overtap the required engagement is {x(r4o.LEreq)} in
+          (available {x(lens.LE)} in).
+        </li>
+      </ul>
     </div>
   );
 }

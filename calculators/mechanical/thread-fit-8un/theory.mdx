@@ -204,6 +204,47 @@ example "1-1/8-8UN-2B oversize +0.003 in", and use matching gauges.
 Overtapping is standard practice for hot-dip galvanized nuts (ASTM A563 /
 A194), where the allowance accommodates the coating on the bolt.
 
+## Thread coating
+
+ASME B1.1 limits apply **before coating** unless the drawing says otherwise.
+A coating therefore adds material to the 2A bolt and removes room from the
+2B nut. For a uniform coating of thickness t, measured normal to the surface,
+each 60° flank moves t / cos 60° = 2t radially. Crests and roots move by t.
+
+<Formula tex="d_2' = d_2 + 4t_b \qquad d' = d + 2t_b \qquad d_3' = d_3 + 2t_b" />
+
+<Formula tex="D_2' = D_2 - 4t_n \qquad D_1' = D_1 - 2t_n \qquad D' = D - 2t_n" />
+
+Maximum material uses the maximum thickness and least material the minimum
+thickness. The tightest (MMC/MMC) pitch-diameter clearance after coating is:
+
+<Formula tex="c_{min}' = es + \Delta - 4\,(t_{b,max} + t_{n,max})" />
+
+Here Δ is any nut oversize. If c′<sub>min</sub> is negative, the coated
+parts **do not assemble** even without load. The section then shows
+interference along the whole engagement.
+
+The coated flank play a′ = c′·tan 30° replaces a in the loaded-flank check:
+g<sub>back</sub> = a′ + p − ε·L<sub>E</sub>. The "Set to required" oversize
+therefore covers both the coating and the load:
+
+<Formula tex="\Delta_{req} = \max\left(0,\ \varepsilon L_E - a' - p\right)\cot 30^\circ" />
+
+B1.1 rules for coated threads:
+
+- **Class 2A:** the allowance es may take up the coating. The coated bolt
+  must still accept a basic-size GO gauge, so 4·t<sub>b,max</sub> ≤ es, i.e.
+  t<sub>b,max</sub> ≤ es/4. That is only about 13 µm for 1-1/8-8UN, enough for
+  electroplated zinc but not for hot-dip galvanizing.
+- **Class 2B:** there is no allowance, so any nut coating takes the thread
+  below basic size. Thick coatings such as hot-dip zinc are handled by
+  **overtapping** the nut; see "Nut oversize".
+
+Coatings are not load-bearing. Tension (A<sub>s</sub>), stripping shear areas,
+engagement depth and the required engagement length all stay on the
+base-metal limits. Only the fit — clearance, flank play and interference —
+uses the coated surfaces.
+
 ## What the model shows
 
 - Threads are true helical 60° UN forms built from the limits above: a flat

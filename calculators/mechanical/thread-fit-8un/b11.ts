@@ -116,7 +116,113 @@ export interface ThreadFit {
   int: InternalLimits;
   /** Diametral oversize applied to the whole nut thread form (0 = standard 2B) */
   nutOversize: number;
+  /** Set on a "surface" fit returned by applyCoating: limits are after coating */
+  coating?: CoatingSpec;
   clearance: Clearance;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Coating                                                                   */
+/* ------------------------------------------------------------------------ */
+
+export const UM_PER_IN = 25400;
+
+export interface CoatRange {
+  /** Coating thickness, measured normal to the thread surface [µm] */
+  min: number;
+  max: number;
+}
+
+export interface CoatingSpec {
+  on: boolean;
+  bolt: CoatRange;
+  nut: CoatRange;
+}
+
+export const DEFAULT_COATING: CoatingSpec = {
+  on: false,
+  bolt: { min: 45, max: 75 },
+  nut: { min: 0, max: 0 },
+};
+
+export function coatingActive(c: CoatingSpec | null | undefined): c is CoatingSpec {
+  return !!c && c.on && (c.bolt.max > 0 || c.nut.max > 0);
+}
+
+/** Thickness in inches: [min, max], with min ≤ max enforced. */
+export function coatIn(r: CoatRange): [number, number] {
+  const a = Math.max(0, Number.isFinite(r.min) ? r.min : 0);
+  const b = Math.max(0, Number.isFinite(r.max) ? r.max : 0);
+  return [Math.min(a, b) / UM_PER_IN, Math.max(a, b) / UM_PER_IN];
+}
+
+/**
+ * Thread limits after coating (ASME B1.1: size limits apply before coating).
+ * A uniform coating of thickness t on a 60° thread changes the pitch diameter
+ * by 4t (each flank moves t / cos 60° = 2t radially) and the major and minor
+ * diameters by 2t. External thread grows, internal thread shrinks. Maximum
+ * material uses the maximum thickness, least material the minimum.
+ * The result is a "surface" fit for clearance / interference analysis only —
+ * strength keeps using the base-metal fit.
+ */
+export function applyCoating(fit: ThreadFit, coat: CoatingSpec | null | undefined): ThreadFit {
+  if (!coatingActive(coat)) return fit;
+  const [bMin, bMax] = coatIn(coat.bolt);
+  const [nMin, nMax] = coatIn(coat.nut);
+  const e = fit.ext;
+  const i = fit.int;
+  const ext: ExternalLimits = {
+    ...e,
+    majorMax: e.majorMax + 2 * bMax,
+    majorMin: e.majorMin + 2 * bMin,
+    pitchMax: e.pitchMax + 4 * bMax,
+    pitchMin: e.pitchMin + 4 * bMin,
+    minorMaxUNR: e.minorMaxUNR + 2 * bMax,
+    minorMinRef: e.minorMinRef + 2 * bMin,
+  };
+  ext.majorTol = ext.majorMax - ext.majorMin;
+  ext.pitchTol = ext.pitchMax - ext.pitchMin;
+  const int: InternalLimits = {
+    ...i,
+    minorMin: i.minorMin - 2 * nMax,
+    minorMax: i.minorMax - 2 * nMin,
+    pitchMin: i.pitchMin - 4 * nMax,
+    pitchMax: i.pitchMax - 4 * nMin,
+    majorMin: i.majorMin - 2 * nMax,
+    majorMaxRef: i.majorMaxRef - 2 * nMin,
+  };
+  int.minorTol = int.minorMax - int.minorMin;
+  int.pitchTol = int.pitchMax - int.pitchMin;
+  return { ...fit, ext, int, coating: coat, clearance: clearanceOf(ext, int) };
+}
+
+export interface CoatingChecks {
+  /** Largest bolt coating the 2A allowance absorbs: es / 4 [µm] */
+  boltMaxInAllowance: number;
+  /** Coated MMC bolt still within basic size (passes a basic-size GO gauge) */
+  boltWithinBasic: boolean;
+  /** Amount the coated MMC bolt pitch diameter exceeds basic [in] (≤ 0 = OK) */
+  boltOverBasic: number;
+  /** Nut coated at all — a 2B thread has no allowance, so it goes below basic */
+  nutBelowBasic: boolean;
+  /** Pitch-diameter clearance consumed at MMC/MMC: 4·(t_b,max + t_n,max) [in] */
+  pdConsumed: number;
+}
+
+/** B1.1 checks for coated threads, evaluated on the base-metal fit. */
+export function coatingChecks(fit: ThreadFit, coat: CoatingSpec): CoatingChecks {
+  const [, bMax] = coatIn(coat.bolt);
+  const [, nMax] = coatIn(coat.nut);
+  const on = coatingActive(coat);
+  const es = fit.ext.allowance;
+  const over = on ? 4 * bMax - es : -es;
+  return {
+    boltMaxInAllowance: (es / 4) * UM_PER_IN,
+    boltWithinBasic: over <= 1e-9,
+    boltOverBasic: over,
+    nutBelowBasic: on && nMax > 0,
+    pdConsumed: on ? 4 * (bMax + nMax) : 0,
+  };
 }
 
 export interface Clearance {

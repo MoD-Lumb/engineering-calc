@@ -15,7 +15,7 @@
  * so they line up with the clipped mesh.
  */
 import * as THREE from 'three';
-import { TAN30, type ThreadFit } from './b11';
+import { TAN30, coatIn, coatingActive, type CoatingSpec, type ThreadFit } from './b11';
 import { boltLengths } from './strength';
 
 export type Cond = 'MMC' | 'LMC';
@@ -68,6 +68,31 @@ export function visualDims(fit: ThreadFit, k: number) {
       MMC: nut(fit.int.minorMin, fit.int.pitchMin),
       LMC: nut(fit.int.minorMax, fit.int.pitchMax),
     } as Record<Cond, ProfileDims>,
+  };
+}
+
+/**
+ * Drawn diameters of the coated surface: the base profile offset normal to
+ * the surface by the coating thickness (×k like every other deviation).
+ * 60° thread: pitch diameter ±4t, major / minor ±2t. MMC carries the maximum
+ * thickness, LMC the minimum. Returns `dims` unchanged without coating.
+ */
+export function coatedDims(
+  dims: ReturnType<typeof visualDims>,
+  coat: CoatingSpec | null | undefined,
+  k: number
+): ReturnType<typeof visualDims> {
+  if (!coatingActive(coat)) return dims;
+  const [bMin, bMax] = coatIn(coat.bolt);
+  const [nMin, nMax] = coatIn(coat.nut);
+  const grow = (d: ProfileDims, t: number, sign: 1 | -1): ProfileDims => ({
+    major: d.major + sign * 2 * k * t,
+    pitch: d.pitch + sign * 4 * k * t,
+    minor: d.minor + sign * 2 * k * t,
+  });
+  return {
+    bolt: { MMC: grow(dims.bolt.MMC, bMax, 1), LMC: grow(dims.bolt.LMC, bMin, 1) },
+    nut: { MMC: grow(dims.nut.MMC, nMax, -1), LMC: grow(dims.nut.LMC, nMin, -1) },
   };
 }
 
