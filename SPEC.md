@@ -426,3 +426,23 @@ The other 5 stubs stay as-is until each is ported.
 8. First deploy to GitHub Pages, verify URLs work under `basePath`.
 
 After that, each new calculator is just: add folder under `calculators/<category>/`, register it, flip `status` to `live` when ready.
+
+---
+
+## 16. Custom 3D calculators
+
+Some calculators need more than the YAML grid. They use the custom `.tsx` pattern from §6, with heavy client code loaded through `next/dynamic` (`ssr: false`), so it stays out of the other pages' bundles.
+
+### `mechanical/thread-fit-8un` — 8UN bolt (2A) / nut (2B) fit, ASME B1.1
+
+| File | Role |
+|---|---|
+| `b11.ts` | ASME B1.1 formulas → limits of size (2A/2B), MMC/LMC, clearances. Pure TS, no UI. |
+| `geometry.ts` | Thread profiles, helical thread meshes, hex bodies, analytic section polygons (Three.js geometry only). |
+| `ThreadViewer.tsx` | Three.js scene: assembled / exploded / isolated, half & quarter sections with hatched caps, MMC/LMC visibility, clearance fill. |
+| `ProfileDetail.tsx` | 2D SVG axial section over two pitches using the same toggles. |
+| `ToleranceTables.tsx` | Limits, clearances and basic dimensions (in + mm, copy as TSV). |
+| `Calculator.tsx` | State and layout; persists size and magnification under `ec-inputs-thread-fit-8un`. |
+| `theory.mdx`, `Examples.tsx` | Theory (MDX) and a worked example computed from `b11.ts`. |
+
+Imperial units are used here on purpose because B1.1 is an inch standard. Millimetres are shown alongside. Dependency added: `three` (+ `@types/three`).
