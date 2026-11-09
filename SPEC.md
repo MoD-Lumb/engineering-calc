@@ -438,8 +438,10 @@ Some calculators need more than the YAML grid. They use the custom `.tsx` patter
 | File | Role |
 |---|---|
 | `b11.ts` | ASME B1.1 formulas → limits of size (2A/2B), MMC/LMC, clearances. Pure TS, no UI. |
+| `strength.ts` | Working load: material presets (A193 B7/B16/B8 Cl.2, A320 L7, SAE J429 Gr 5/8 + nut grades), B1.1 tensile stress area, bolt yield, B1.1 / FED-STD-H28 thread stripping, elongation (nut fixed), full-load-stretch flank interference, and the bolt displacement field shared with the 3D shader. Pure TS. |
+| `StrengthPanel.tsx`, `FlankGapChart.tsx` | Load case inputs (materials, load kN/lbf, grip length, apply load) and results table; SVG chart of flank gaps along the engagement. |
 | `geometry.ts` | Thread profiles, helical thread meshes, hex bodies, analytic section polygons (Three.js geometry only). |
-| `ThreadViewer.tsx` | Three.js scene: assembled / exploded / isolated, half & quarter sections with hatched caps, MMC/LMC visibility, clearance fill. |
+| `ThreadViewer.tsx` | Three.js scene: assembled / exploded / isolated, half & quarter sections with hatched caps, MMC/LMC visibility, clearance fill; bolt stretch under load in the vertex shader (shared uniforms), interference fill + markers. |
 | `ProfileDetail.tsx` | 2D SVG axial section over two pitches using the same toggles. |
 | `ToleranceTables.tsx` | Limits, clearances and basic dimensions (in + mm, copy as TSV). |
 | `Calculator.tsx` | State and layout; persists size and magnification under `ec-inputs-thread-fit-8un`. |

@@ -5,12 +5,16 @@ import { fmtIn, type ThreadFit } from './b11';
 import {
   basicProfile,
   boltProfile,
+  clipPolyline,
   evalProfile,
   nutProfile,
+  regionBetween,
   visualDims,
   type Cond,
   type ProfileSample,
+  type Pt,
 } from './geometry';
+import { stretchDx, stretchR, type StretchParams } from './strength';
 import { PALETTE, type Visibility } from './viewTypes';
 
 type P2 = [number, number];
@@ -33,13 +37,15 @@ interface Props {
   fit: ThreadFit;
   k: number;
   vis: Visibility;
+  /** Working load applied: bolt displacement field (drawing units) and end of engagement */
+  loaded?: { params: StretchParams; eB: number } | null;
 }
 
 /**
  * Axial section of the engaged threads over two pitches, drawn at 1:1 aspect,
  * using the same colours and toggles as the 3D view.
  */
-export function ProfileDetail({ fit, k, vis }: Props) {
+export function ProfileDetail({ fit, k, vis, loaded }: Props) {
   const data = useMemo(() => {
     const { P, D, E, D1 } = fit;
     const dims = visualDims(fit, k);
@@ -51,8 +57,10 @@ export function ProfileDetail({ fit, k, vis }: Props) {
       MMC: nutProfile(dims.nut.MMC, P, 8),
       LMC: nutProfile(dims.nut.LMC, P, 8),
     };
-    const s0 = -P;
-    const s1 = P;
+    // unloaded: two pitches around a bolt crest; loaded: the last engaged threads
+    const xc = loaded ? Math.floor((loaded.eB - P) / P) * P : 0;
+    const s0 = xc - P;
+    const s1 = xc + P;
     const rMin = Math.min(dims.bolt.MMC.minor, dims.bolt.LMC.minor, D1) / 2 - 0.1 * P;
     const rMax = Math.max(dims.nut.MMC.major, dims.nut.LMC.major, D) / 2 + 0.1 * P;
     const S = 1000; // drawing units per inch
@@ -62,11 +70,25 @@ export function ProfileDetail({ fit, k, vis }: Props) {
     const Y = (r: number) => (rMax - r) * S;
     const path = (pts: P2[]) => pts.map(([s, r], i) => `${i ? 'L' : 'M'}${X(s).toFixed(2)},${Y(r).toFixed(2)}`).join('');
     const line = (smp: ProfileSample[]) => periodic(smp, P, s0, s1);
-    const nutFill = (c: Cond) => path([...line(nut[c]), [s1, rMax], [s0, rMax]]) + 'Z';
-    const boltFill = (c: Cond) => path([...line(bolt[c]), [s1, rMin], [s0, rMin]]) + 'Z';
-    const clr = (bc: Cond, nc: Cond) => path([...line(bolt[bc]), ...line(nut[nc]).reverse()]) + 'Z';
+    const boltLine = (smp: ProfileSample[]): Pt[] => {
+      if (!loaded) return line(smp);
+      const sp = loaded.params;
+      const moved = periodic(smp, P, s0 - 2 * P, s1 + 2 * P).map(
+        ([x, r]) => [x + stretchDx(sp, x), r * stretchR(sp, x)] as Pt
+      );
+      return clipPolyline(moved, s0, s1);
+    };
+    const boltL = { MMC: boltLine(bolt.MMC), LMC: boltLine(bolt.LMC) };
+    const nutL = { MMC: line(nut.MMC), LMC: line(nut.LMC) };
+    const nutFill = (c: Cond) => path([...nutL[c], [s1, rMax], [s0, rMax]]) + 'Z';
+    const boltFill = (c: Cond) => path([...boltL[c], [s1, rMin], [s0, rMin]]) + 'Z';
+    const polys = (ps: Pt[][]) => ps.map((pp) => path(pp) + 'Z').join('');
+    const clr = (bc: Cond, nc: Cond) => polys(regionBetween(boltL[bc], nutL[nc], s0, s1));
+    const intf = (bc: Cond, nc: Cond) => polys(regionBetween(nutL[nc], boltL[bc], s0, s1));
     return {
       P,
+      xc,
+      intf,
       W,
       Hh,
       X,
@@ -76,10 +98,10 @@ export function ProfileDetail({ fit, k, vis }: Props) {
       boltFill,
       clr,
       lines: {
-        boltMMC: path(line(bolt.MMC)),
-        boltLMC: path(line(bolt.LMC)),
-        nutMMC: path(line(nut.MMC)),
-        nutLMC: path(line(nut.LMC)),
+        boltMMC: path(boltL.MMC),
+        boltLMC: path(boltL.LMC),
+        nutMMC: path(nutL.MMC),
+        nutLMC: path(nutL.LMC),
         basic: path(line(basicProfile(fit))),
       },
       refs: [
@@ -88,7 +110,7 @@ export function ProfileDetail({ fit, k, vis }: Props) {
         { r: D1 / 2, label: `D₁ = ${fmtIn(D1)}` },
       ],
     };
-  }, [fit, k]);
+  }, [fit, k, loaded]);
 
   const { W, Hh, X, Y } = data;
   const labelW = W * 0.34;
@@ -111,6 +133,16 @@ export function ProfileDetail({ fit, k, vis }: Props) {
       {vis.boltLMC && <path d={data.boltFill('LMC')} fill={PALETTE.boltLMC.fill} />}
       {vis.clearance && bc && nc && (
         <path d={data.clr(bc, nc)} fill={PALETTE.clearance} fillOpacity={0.9} />
+      )}
+      {loaded && bc && nc && (
+        <path
+          d={data.intf(bc, nc)}
+          fill={PALETTE.interference}
+          stroke={PALETTE.interference}
+          strokeWidth={3}
+          strokeLinejoin="round"
+          vectorEffect="non-scaling-stroke"
+        />
       )}
       {vis.nutMMC && <Stroke d={data.lines.nutMMC} color={PALETTE.nutMMC.line} />}
       {vis.nutLMC && <Stroke d={data.lines.nutLMC} color={PALETTE.nutLMC.line} />}
@@ -153,18 +185,18 @@ export function ProfileDetail({ fit, k, vis }: Props) {
       {/* pitch dimension */}
       <g className="stroke-slate-700">
         <line
-          x1={X(-data.P / 2)}
-          x2={X(data.P / 2)}
+          x1={X(data.xc - data.P / 2)}
+          x2={X(data.xc + data.P / 2)}
           y1={Hh * 0.1}
           y2={Hh * 0.1}
           strokeWidth={0.8}
           vectorEffect="non-scaling-stroke"
         />
-        <line x1={X(-data.P / 2)} x2={X(-data.P / 2)} y1={Hh * 0.06} y2={Hh * 0.14} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
-        <line x1={X(data.P / 2)} x2={X(data.P / 2)} y1={Hh * 0.06} y2={Hh * 0.14} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+        <line x1={X(data.xc - data.P / 2)} x2={X(data.xc - data.P / 2)} y1={Hh * 0.06} y2={Hh * 0.14} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
+        <line x1={X(data.xc + data.P / 2)} x2={X(data.xc + data.P / 2)} y1={Hh * 0.06} y2={Hh * 0.14} strokeWidth={0.8} vectorEffect="non-scaling-stroke" />
       </g>
       <text
-        x={X(0)}
+        x={X(data.xc)}
         y={Hh * 0.1}
         dy="-0.4em"
         textAnchor="middle"

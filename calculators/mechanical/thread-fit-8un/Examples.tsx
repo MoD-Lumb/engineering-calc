@@ -1,5 +1,13 @@
 import { Formula } from '@/components/Formula';
 import { SIZES_8UN, computeFit, fmtIn, fmtMm, roundTo } from './b11';
+import {
+  BOLT_GRADES,
+  LBF_PER_KN,
+  NUT_GRADES,
+  boltGradeProps,
+  boltLengths,
+  computeStrength,
+} from './strength';
 
 /** Worked example, computed live from the same functions as the calculator. */
 export default function Examples() {
@@ -10,6 +18,20 @@ export default function Examples() {
   const b = 0.0015 * Math.sqrt(f.LE);
   const c = 0.015 * Math.cbrt(P * P);
   const x = (v: number, dp = 4) => fmtIn(v, dp);
+
+  // Example 2: working load
+  const bm = boltGradeProps(BOLT_GRADES.find((g) => g.id === 'B7')!, D);
+  const nm = NUT_GRADES.find((g) => g.id === '2H')!;
+  const grip = 2.25;
+  const F = 50000;
+  const lens = boltLengths(D, P, grip);
+  const r = computeStrength(f, lens, F, bm, nm);
+  const kip = (lbf: number) => (lbf / 1000).toFixed(1);
+  const kN = (lbf: number) => (lbf / LBF_PER_KN).toFixed(1);
+  const ksi = (psi: number) => (psi / 1000).toFixed(1);
+  const sm = r.strip.LMC;
+  const mm = r.fit.MMC;
+  const lm = r.fit.LMC;
 
   return (
     <div className="space-y-4 text-sm leading-relaxed text-slate-700 dark:text-slate-300">
@@ -95,6 +117,81 @@ export default function Examples() {
       <blockquote className="border-l-2 border-accent-400 pl-3 text-slate-600 dark:text-slate-400 italic">
         In the Calculator tab choose 1-1/8&quot;-8 UN, turn on the half section and press “Thread detail”.
         The MMC pair shows the minimum clearance; switch to the LMC pair to see the maximum.
+      </blockquote>
+
+      <h3 className="pt-4 text-base font-semibold text-slate-900 dark:text-slate-100">
+        Example 2 — the same joint under a working load of {kip(F)} kip ({kN(F)} kN)
+      </h3>
+      <p>
+        Bolt ASTM A193 B7: S<sub>y</sub> = {bm.Sy} ksi, S<sub>u</sub> = {bm.Su} ksi (D ≤ 2-1/2 in). Nut A194 2H
+        (estimated S<sub>y</sub> = {nm.Sy} ksi). Grip {grip} in, nut fixed, E = {bm.E.toLocaleString('en-US')} ksi.
+      </p>
+
+      <h4 className="font-medium text-slate-900 dark:text-slate-100">1. Bolt tension and yield</h4>
+      <p>
+        S<sub>u</sub> &gt; 100 ksi, so B1.1 uses the high-strength form of the tensile stress area with
+        E<sub>s,min</sub> = {x(f.ext.pitchMin)} in:
+      </p>
+      <Formula
+        tex={`A_s = \\pi\\left(\\tfrac{${x(f.ext.pitchMin)}}{2} - \\tfrac{0.16238}{8}\\right)^2 = ${r.As.toFixed(4)}\\ \\text{in}^2 \\quad (\\text{basic form: } ${r.AsBasic.toFixed(4)})`}
+      />
+      <Formula
+        tex={`\\sigma = \\tfrac{${F}}{${r.As.toFixed(4)}} = ${ksi(r.sigma)}\\ \\text{ksi} \\qquad F_y = ${bm.Sy}\\cdot${r.As.toFixed(4)} = ${kip(r.Fy)}\\ \\text{kip} \\qquad \\sigma/S_y = ${(r.utilTension * 100).toFixed(0)}\\%`}
+      />
+
+      <h4 className="font-medium text-slate-900 dark:text-slate-100">2. Thread stripping (LMC/LMC, B1.1 worst case)</h4>
+      <p>
+        L<sub>E</sub> = {x(lens.nutH)} − 2·0.3464·P = {x(lens.LE)} in (nut thickness minus countersinks).
+      </p>
+      <Formula
+        tex={`A_{sb} = \\pi\\cdot8\\cdot${x(lens.LE)}\\cdot${x(f.int.minorMax, 3)}\\left[\\tfrac{1}{16} + 0.57735(${x(f.ext.pitchMin)} - ${x(f.int.minorMax, 3)})\\right] = ${sm.ABolt.toFixed(3)}\\ \\text{in}^2`}
+      />
+      <Formula
+        tex={`A_{sn} = \\pi\\cdot8\\cdot${x(lens.LE)}\\cdot${x(f.ext.majorMin)}\\left[\\tfrac{1}{16} + 0.57735(${x(f.ext.majorMin)} - ${x(f.int.pitchMax)})\\right] = ${sm.ANut.toFixed(3)}\\ \\text{in}^2`}
+      />
+      <ul className="list-disc pl-5 space-y-1">
+        <li>
+          Bolt thread: τ = {ksi(sm.tauBolt)} ksi vs 0.577·{bm.Sy} = {(0.577 * bm.Sy).toFixed(1)} ksi →{' '}
+          {(sm.utilBolt * 100).toFixed(0)} %
+        </li>
+        <li>
+          Nut thread: τ = {ksi(sm.tauNut)} ksi vs 0.577·{nm.Sy} = {(0.577 * nm.Sy).toFixed(1)} ksi →{' '}
+          {(sm.utilNut * 100).toFixed(0)} %
+        </li>
+        <li>
+          Ultimate stripping {kip(Math.min(sm.FuBolt, sm.FuNut))} kip &gt; bolt breaking load {kip(r.Fu)} kip, and
+          L<sub>E,req</sub> = {x(r.LEreq)} in &lt; L<sub>E</sub> — the bolt breaks before the threads strip.
+        </li>
+      </ul>
+
+      <h4 className="font-medium text-slate-900 dark:text-slate-100">3. Elongation with the nut fixed</h4>
+      <p>
+        Bolt length {x(lens.L, 2)} in, thread length {x(lens.LT, 2)} in → plain shank L<sub>s</sub> ={' '}
+        {x(lens.Ls, 3)} in, free thread L<sub>t</sub> = {x(lens.Lt, 3)} in.
+      </p>
+      <Formula
+        tex={`\\delta = \\tfrac{${F}}{29\\,000\\,000}\\left(\\tfrac{${x(lens.Ls, 3)}}{${r.Ab.toFixed(4)}} + \\tfrac{${x(lens.Lt, 3)}}{${r.As.toFixed(4)}} + \\tfrac{${x(lens.LE, 3)}}{${r.As.toFixed(4)}}\\right) = ${r.dTotal.toFixed(5)}\\ \\text{in} = ${(r.dTotal * 25.4).toFixed(3)}\\ \\text{mm}`}
+      />
+
+      <h4 className="font-medium text-slate-900 dark:text-slate-100">4. Flank interference</h4>
+      <p>
+        ε = {(r.epsT * 1e6).toFixed(0)} µε, so the engaged bolt thread grows by ε·L<sub>E</sub> ={' '}
+        {x(mm.growth, 5)} in.
+      </p>
+      <ul className="list-disc pl-5 space-y-1">
+        <li>
+          MMC/MMC: play a = {x(mm.a, 5)} in, Poisson gain p = {x(mm.p, 5)} in → back-flank gap at the last
+          thread = {x(mm.gapEnd, 5)} in → <b>{mm.gapEnd < 0 ? 'interference' : 'no interference'}</b>. Onset at
+          F<sub>int</sub> = {kip(mm.Fint)} kip ({((mm.Fint / r.Fy) * 100).toFixed(0)} % of F<sub>y</sub>).
+        </li>
+        <li>
+          LMC/LMC: a = {x(lm.a, 5)} in → gap {x(lm.gapEnd, 5)} in, onset at {kip(lm.Fint)} kip — above the yield
+          load, so it never occurs in the elastic range.
+        </li>
+      </ul>
+      <blockquote className="border-l-2 border-accent-400 pl-3 text-slate-600 dark:text-slate-400 italic">
+        In the Calculator tab set the load to {kN(F)} kN, choose “MMC pair”, press “Apply load in 3D” and then
+        “Thread detail”. The magenta fill at the far end of the nut is the interference.
       </blockquote>
     </div>
   );

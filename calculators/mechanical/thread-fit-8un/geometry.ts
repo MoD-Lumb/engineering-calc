@@ -16,6 +16,7 @@
  */
 import * as THREE from 'three';
 import { TAN30, type ThreadFit } from './b11';
+import { boltLengths } from './strength';
 
 export type Cond = 'MMC' | 'LMC';
 export const CONDS: Cond[] = ['MMC', 'LMC'];
@@ -214,17 +215,22 @@ export interface Layout {
   rCs: number;
   /** Nut translation in the exploded configuration */
   explode: number;
+  /** Grip length: head bearing face (x = 0) to nut bearing face (nutA) */
+  grip: number;
+  /** Engaged thread range (nut faces minus countersinks) */
+  eA: number;
+  eB: number;
 }
 
-export function computeLayout(fit: ThreadFit, dims: ReturnType<typeof visualDims>): Layout {
+export function computeLayout(
+  fit: ThreadFit,
+  dims: ReturnType<typeof visualDims>,
+  grip: number
+): Layout {
   const { D, P } = fit;
   const F = 1.5 * D + 0.125;
-  const nutH = D - (D <= 1.125 ? 1 / 64 : D <= 2 ? 1 / 32 : 3 / 64);
   const headH = 0.62 * D;
-  const xTs = 0.5 * D;
-  const nutA = xTs + 0.25 * D + 2 * P;
-  const nutB = nutA + nutH;
-  const L = nutB + Math.max(3 * P, 0.3 * D);
+  const { nutH, nutA, nutB, L, xTs, eA, eB } = boltLengths(D, P, grip);
   const minMinor = Math.min(dims.bolt.MMC.minor, dims.bolt.LMC.minor);
   const maxNutMajor = Math.max(dims.nut.MMC.major, dims.nut.LMC.major);
   const rCore = Math.max(0.05 * D, minMinor / 2 - 0.12 * P);
@@ -244,6 +250,9 @@ export function computeLayout(fit: ThreadFit, dims: ReturnType<typeof visualDims
     rCore,
     rCs,
     explode: L - nutA + 0.6 * D,
+    grip,
+    eA,
+    eB,
   };
 }
 
@@ -711,15 +720,80 @@ export function nutSection(
   return { common: [common], cond, outline };
 }
 
-/** Gap between bolt and nut over the nut length (assembled only). */
-export function clearancePolygon(
-  lay: Layout,
-  boltSamples: ProfileSample[],
-  nutSamples: ProfileSample[],
-  theta: number
-): Pt[] {
-  const { nutA, nutB, P } = lay;
-  const bolt = threadPolyline(boltSamples, P, nutA, nutB, theta, boltEnvelope(lay));
-  const nut = threadPolyline(nutSamples, P, nutA, nutB, theta, nutEnvelope(lay));
-  return dedupe([...bolt, ...nut.reverse()]);
+/** Linear interpolation of an x-monotonic polyline (clamped at the ends). */
+export function interpPolyline(poly: Pt[], x: number): number {
+  const n = poly.length;
+  if (x <= poly[0][0]) return poly[0][1];
+  if (x >= poly[n - 1][0]) return poly[n - 1][1];
+  let lo = 0;
+  let hi = n - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (poly[mid][0] <= x) lo = mid;
+    else hi = mid;
+  }
+  const [x0, y0] = poly[lo];
+  const [x1, y1] = poly[hi];
+  return x1 - x0 > 1e-15 ? y0 + ((y1 - y0) * (x - x0)) / (x1 - x0) : y0;
+}
+
+/** Restrict an x-monotonic polyline to [xa, xb] (with interpolated end points). */
+export function clipPolyline(poly: Pt[], xa: number, xb: number): Pt[] {
+  const inner = poly.filter(([x]) => x > xa && x < xb);
+  return [[xa, interpPolyline(poly, xa)], ...inner, [xb, interpPolyline(poly, xb)]];
+}
+
+/**
+ * Regions where `upper` lies above `lower` (both x-monotonic polylines
+ * r(x)), between xa and xb. Breakpoints of both are merged and crossings are
+ * inserted, so the polygons are exact for piecewise-linear inputs.
+ * Used for the clearance (nut above bolt) and interference (bolt above nut).
+ */
+export function regionBetween(lower: Pt[], upper: Pt[], xa: number, xb: number, eps = 1e-9): Pt[][] {
+  const xs = new Set<number>([xa, xb]);
+  for (const [x] of lower) if (x > xa && x < xb) xs.add(x);
+  for (const [x] of upper) if (x > xa && x < xb) xs.add(x);
+  const sorted = [...xs].sort((a, b) => a - b);
+  const pts: Array<{ x: number; lo: number; up: number }> = [];
+  let prev: { x: number; lo: number; up: number } | null = null;
+  for (const x of sorted) {
+    const cur = { x, lo: interpPolyline(lower, x), up: interpPolyline(upper, x) };
+    if (prev) {
+      const d0 = prev.up - prev.lo;
+      const d1 = cur.up - cur.lo;
+      if ((d0 > 0 && d1 < 0) || (d0 < 0 && d1 > 0)) {
+        const t = d0 / (d0 - d1);
+        const xc = prev.x + (cur.x - prev.x) * t;
+        const rc = prev.lo + (cur.lo - prev.lo) * t;
+        pts.push({ x: xc, lo: rc, up: rc });
+      }
+    }
+    pts.push(cur);
+    prev = cur;
+  }
+  const out: Pt[][] = [];
+  let run: typeof pts = [];
+  let hasPositive = false;
+  const flush = () => {
+    if (run.length >= 2 && hasPositive) {
+      const poly = dedupe([
+        ...run.map((q) => [q.x, q.lo] as Pt),
+        ...run.reverse().map((q) => [q.x, q.up] as Pt),
+      ]);
+      if (poly.length >= 3) out.push(poly);
+    }
+    run = [];
+    hasPositive = false;
+  };
+  for (const q of pts) {
+    const d = q.up - q.lo;
+    if (d >= -eps) {
+      run.push(q);
+      if (d > eps) hasPositive = true;
+    } else {
+      flush();
+    }
+  }
+  flush();
+  return out;
 }

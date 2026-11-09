@@ -32,7 +32,8 @@ export const PALETTE = {
   nutMMC: { solid: '#2563eb', fill: '#3b82f6', line: '#1e3a8a' },
   nutLMC: { solid: '#06b6d4', fill: '#a5f3fc', line: '#155e75' },
   clearance: '#22c55e',
-  basic: { light: '#a21caf', dark: '#f0abfc' },
+  interference: '#d946ef',
+  basic: { light: '#6d28d9', dark: '#c4b5fd' },
   boltSteel: '#c0c6cf',
   nutSteel: '#a3acb8',
 } as const;

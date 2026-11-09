@@ -4,9 +4,21 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import dynamic from 'next/dynamic';
 import { AlertTriangle, Crosshair, Maximize2, Move3d, RectangleHorizontal } from 'lucide-react';
 import { SIZES_8UN, computeFit, fmtIn } from './b11';
-import { visualDims } from './geometry';
+import { visualDims, type Cond } from './geometry';
 import { ProfileDetail } from './ProfileDetail';
 import { ToleranceTables } from './ToleranceTables';
+import { FlankGapChart } from './FlankGapChart';
+import {
+  DEFAULT_LOAD_CASE,
+  LoadCaseInputs,
+  StrengthResults,
+  effectiveGrip,
+  forceLbf,
+  resolveBolt,
+  resolveNut,
+  type LoadCase,
+} from './StrengthPanel';
+import { boltLengths, computeStrength, flankFit, stretchParams } from './strength';
 import {
   DEFAULT_VIS,
   PALETTE,
@@ -155,6 +167,7 @@ export default function ThreadFitCalculator() {
   const [section, setSection] = useState<Section>('half');
   const [vis, setVis] = useState<Visibility>(DEFAULT_VIS);
   const [view, setView] = useState<{ kind: ViewKind; n: number }>({ kind: 'iso', n: 0 });
+  const [lc, setLc] = useState<LoadCase>(DEFAULT_LOAD_CASE);
   const [hydrated, setHydrated] = useState(false);
   const dark = useDarkMode();
 
@@ -162,9 +175,12 @@ export default function ThreadFitCalculator() {
     try {
       const raw = window.localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const saved = JSON.parse(raw) as { D?: number; k?: number };
+        const saved = JSON.parse(raw) as { D?: number; k?: number; lc?: Partial<LoadCase> };
         if (saved.D && SIZES_8UN.some((s) => s.D === saved.D)) setSizeD(saved.D);
         if (saved.k && saved.k >= 1 && saved.k <= 5) setK(saved.k);
+        if (saved.lc && typeof saved.lc === 'object') {
+          setLc({ ...DEFAULT_LOAD_CASE, ...saved.lc, applied: false });
+        }
       }
     } catch {
       // ignore
@@ -175,11 +191,11 @@ export default function ThreadFitCalculator() {
   useEffect(() => {
     if (!hydrated) return;
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ D: sizeD, k }));
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ D: sizeD, k, lc: { ...lc, applied: false } }));
     } catch {
       // ignore
     }
-  }, [sizeD, k, hydrated]);
+  }, [sizeD, k, lc, hydrated]);
 
   const size = SIZES_8UN.find((s) => s.D === sizeD) ?? SIZES_8UN[1];
   const fit = useMemo(() => computeFit(size), [size]);
@@ -189,6 +205,34 @@ export default function ThreadFitCalculator() {
     const d = visualDims(fit, k);
     return (d.bolt.LMC.major - d.nut.LMC.minor) / 2 / fit.basicEngagement;
   }, [fit, k]);
+
+  // ---- working load
+  const grip = effectiveGrip(lc, fit.D);
+  const lens = useMemo(() => boltLengths(fit.D, fit.P, grip), [fit, grip]);
+  const boltMat = resolveBolt(lc, fit.D);
+  const nutMat = resolveNut(lc);
+  const Flbf = Math.max(0, forceLbf(lc) || 0);
+  const res = useMemo(
+    () =>
+      computeStrength(fit, lens, Flbf, { ...boltMat }, { Sy: nutMat.Sy, Su: nutMat.Su }),
+    [fit, lens, Flbf, boltMat.Sy, boltMat.Su, boltMat.E, boltMat.nu, nutMat.Sy, nutMat.Su]
+  );
+  // the 3D / 2D pictures use the outermost visible bolt and innermost visible nut
+  const pairBolt: Cond = vis.boltMMC || !vis.boltLMC ? 'MMC' : 'LMC';
+  const pairNut: Cond = vis.nutMMC || !vis.nutLMC ? 'MMC' : 'LMC';
+  const pairFit = useMemo(
+    () => flankFit(fit, pairBolt, pairNut, Flbf, res.As, boltMat.E, boltMat.nu, lens.LE),
+    [fit, pairBolt, pairNut, Flbf, res.As, boltMat.E, boltMat.nu, lens.LE]
+  );
+  const sp = useMemo(
+    () => stretchParams(lens, fit.P, res, pairFit, boltMat.nu, k, lc.M),
+    [lens, fit.P, res, pairFit, boltMat.nu, k, lc.M]
+  );
+  const load = useMemo(() => ({ applied: lc.applied, params: sp }), [lc.applied, sp]);
+  const loaded2D = useMemo(
+    () => (lc.applied ? { params: stretchParams(lens, fit.P, res, pairFit, boltMat.nu, k, k), eB: lens.eB } : null),
+    [lc.applied, lens, fit.P, res, pairFit, boltMat.nu, k]
+  );
 
   const setCond = (key: CondKey | 'basic' | 'clearance', v: boolean) =>
     setVis((prev) => ({ ...prev, [key]: v }));
@@ -252,6 +296,15 @@ export default function ThreadFitCalculator() {
         </label>
       </div>
 
+      <LoadCaseInputs
+        fit={fit}
+        lc={lc}
+        setLc={setLc}
+        res={res}
+        lens={lens}
+        pair={{ bolt: pairBolt, nut: pairNut, gapEnd: pairFit.gapEnd }}
+      />
+
       {/* 3D viewer */}
       <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
         <div className="flex flex-wrap items-center gap-x-5 gap-y-2 px-3 py-2 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40">
@@ -301,6 +354,8 @@ export default function ThreadFitCalculator() {
             vis={vis}
             dark={dark}
             view={view}
+            grip={grip}
+            load={load}
             className="absolute inset-0"
           />
           <div className="pointer-events-none absolute left-3 top-2 text-[11px] leading-snug text-slate-600 dark:text-slate-300 font-mono">
@@ -406,14 +461,39 @@ export default function ThreadFitCalculator() {
           <h3 className="text-sm font-semibold">
             Thread profile detail{' '}
             <span className="font-normal text-slate-500 dark:text-slate-400">
-              — axial section over two pitches, 1:1 aspect, deviations ×{k}
+              {lc.applied
+                ? `— last engaged threads (far end of the nut) under F, pair ${pairBolt}/${pairNut}, deviations and thread strain ×${k}`
+                : `— axial section over two pitches, 1:1 aspect, deviations ×${k}`}
             </span>
           </h3>
         </header>
         <div className="p-3">
-          <ProfileDetail fit={fit} k={k} vis={vis} />
+          <ProfileDetail fit={fit} k={k} vis={vis} loaded={loaded2D} />
         </div>
       </section>
+
+      <section className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <header className="px-4 py-2 bg-slate-50 dark:bg-slate-900/40 border-b border-slate-200 dark:border-slate-800">
+          <h3 className="text-sm font-semibold">
+            Flank gaps along the engagement{' '}
+            <span className="font-normal text-slate-500 dark:text-slate-400">
+              — under F = {(Flbf / 224.80894).toFixed(1)} kN, true scale, first engaged thread bearing
+            </span>
+          </h3>
+        </header>
+        <div className="p-3">
+          <FlankGapChart
+            fits={res.fit}
+            eps={res.epsT}
+            LE={lens.LE}
+            P={fit.P}
+            unit={lc.unit === 'kN' ? 'mm' : 'in'}
+            dark={dark}
+          />
+        </div>
+      </section>
+
+      <StrengthResults fit={fit} res={res} lens={lens} lc={lc} />
 
       <ToleranceTables fit={fit} />
     </div>
